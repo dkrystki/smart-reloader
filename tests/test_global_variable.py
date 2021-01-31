@@ -1,0 +1,347 @@
+from tests import utils
+from tests.utils import Module, Reloader
+
+
+class TestGlobalVariable(utils.TestBase):
+    def test_modified_global_var_with_dependencies(self, sandbox):
+        init = Module("__init__.py",
+        """
+        from . import carwash
+        from . import car
+        from . import accounting
+        from . import client
+        from . import boss
+        """
+        )
+
+        carwash = Module("carwash.py",
+        """
+        sprinkler_n = 3
+        money = 1e3
+        """
+        )
+
+        car = Module("car.py",
+        """
+        from .carwash import sprinkler_n
+
+        car_sprinklers = sprinkler_n / 3
+        """
+        )
+
+        accounting = Module("accounting.py",
+        """
+        from .car import car_sprinklers
+
+        sprinklers_from_accounting = car_sprinklers * 10
+        """
+        )
+
+        client = Module("client.py",
+        """
+        from . import carwash
+
+        client_car_sprinklers = carwash.sprinkler_n / 3
+        """
+        )
+
+        boss = Module("boss.py",
+        """
+        from . import carwash
+
+        actual_money = carwash.money * 5
+        """
+        )
+
+        init.load()
+
+        carwash.device = init.device.carwash
+        car.device = init.device.car
+        accounting.device = init.device.accounting
+        client.device = init.device.client
+        boss.device = init.device.boss
+
+        assert carwash.device.sprinkler_n == 3
+        assert car.device.car_sprinklers == 1
+
+        carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
+
+        reloader = Reloader(sandbox.parent)
+        reloader.reload(carwash)
+        reloader.assert_actions(
+            'Update: Module: sandbox.carwash',
+         'Update: Variable: sandbox.carwash.sprinkler_n',
+         'Update: Module: sandbox.car',
+         'Update: Variable: sandbox.car.sprinkler_n',
+         'Update: Variable: sandbox.car.car_sprinklers',
+         'Update: Module: sandbox.accounting',
+         'Update: Variable: sandbox.accounting.car_sprinklers',
+         'Update: Variable: sandbox.accounting.sprinklers_from_accounting',
+         'Update: Module: sandbox.client',
+         'Update: Variable: sandbox.client.client_car_sprinklers'
+        )
+
+        assert carwash.device.sprinkler_n == 6
+        assert car.device.sprinkler_n == 6
+        assert car.device.car_sprinklers == 2
+        assert accounting.device.car_sprinklers == 2
+        assert accounting.device.sprinklers_from_accounting == 20
+        assert client.device.client_car_sprinklers == 2
+
+    def test_modified_import_star(self, sandbox):
+        init = Module("__init__.py",
+        """
+        from . import carwash
+        from . import car
+        """
+        )
+
+        carwash = Module("carwash.py",
+        """
+        sprinkler_n = 3
+        """
+        )
+
+        car = Module("car.py",
+        """
+        from .carwash import *
+        
+        car_sprinklers = sprinkler_n / 3
+        """
+        )
+
+        init.load()
+        carwash.device = init.device.carwash
+        car.device = init.device.car
+
+        assert carwash.device.sprinkler_n == 3
+        assert car.device.car_sprinklers == 1
+
+        carwash.rewrite(
+        """
+        sprinkler_n = 6
+        """
+        )
+
+        reloader = Reloader(sandbox.parent)
+        reloader.reload(carwash)
+
+        reloader.assert_actions(
+        "Update: Module: sandbox.carwash",
+        "Update: Variable: sandbox.carwash.sprinkler_n",
+        "Update: Module: sandbox.car",
+        "Update: Variable: sandbox.car.sprinkler_n",
+        "Update: Variable: sandbox.car.car_sprinklers"
+        )
+
+        assert carwash.device.sprinkler_n == 6
+        assert car.device.car_sprinklers == 2
+
+    def test_modified_import_star_nested_twice(self, sandbox):
+        init = Module("__init__.py",
+        """
+        from . import carwash
+        from . import container
+        from . import car
+        """
+        )
+
+        carwash = Module("carwash.py",
+        """
+        sprinkler_n = 3
+        """
+        )
+
+        container = Module("container.py",
+        """
+        from .carwash import *
+        """
+        )
+
+        car = Module("car.py",
+
+        """
+        from .container import *
+        
+        car_sprinklers = sprinkler_n / 3
+        """
+        )
+
+        init.load()
+        carwash.device = init.device.carwash
+        container.device = init.device.container
+        car.device = init.device.car
+
+        assert carwash.device.sprinkler_n == 3
+        assert car.device.car_sprinklers == 1
+
+        carwash.rewrite(
+        """
+        sprinkler_n = 6
+        """
+        )
+
+        reloader = Reloader(sandbox.parent)
+        reloader.reload(carwash)
+
+        reloader.assert_actions(
+        'Update: Module: sandbox.carwash',
+     'Update: Variable: sandbox.carwash.sprinkler_n',
+     'Update: Module: sandbox.container',
+     'Update: Variable: sandbox.container.sprinkler_n',
+     'Update: Module: sandbox.car',
+     'Update: Variable: sandbox.car.sprinkler_n',
+     'Update: Variable: sandbox.car.car_sprinklers'
+        )
+
+        assert carwash.device.sprinkler_n == 6
+        assert car.device.car_sprinklers == 2
+
+    def test_added_global_var(self, sandbox):
+        module = Module("module.py",
+        """
+        global_var1 = 1
+        """)
+
+        module.load()
+        module.append("global_var2 = 2")
+
+        reloader = Reloader(sandbox)
+        reloader.reload(module)
+
+        reloader.assert_actions("Update: Module: module", "Add: Variable: module.global_var2")
+
+        module.assert_obj_in("global_var1")
+        module.assert_obj_in("global_var2")
+
+        assert module.device.global_var1 == 1
+        assert module.device.global_var2 == 2
+
+    def test_fixes_class_references(self, sandbox):
+        module = Module("module.py",
+        """
+        class Car:
+            pass
+
+        car_class = None
+        """)
+
+        module.load()
+
+        old_Car_class = module.device.Car
+        module.replace("car_class = None", "car_class = Car")
+
+        reloader = Reloader(sandbox)
+        reloader.reload(module)
+
+        reloader.assert_actions(
+            "Update: Module: module", "Update: Variable: module.car_class"
+        )
+
+        assert module.device.Car is old_Car_class
+        assert module.device.car_class is module.device.Car
+
+    def test_fixes_function_references(self, sandbox):
+        module = Module("module.py",
+        """
+        def fun():
+            return 10
+
+        car_fun = None
+        """)
+
+        module.load()
+
+        old_fun = module.device.fun
+
+        module.replace("car_fun = None", "car_fun = fun")
+
+        reloader = Reloader(sandbox.parent)
+        reloader.reload(module)
+
+        reloader.assert_actions(
+            "Update: Module: module", "Update: Variable: module.car_fun",
+        )
+
+        assert module.device.fun is old_fun
+        assert module.device.car_fun is module.device.fun
+
+    def test_modified_global_var(self, sandbox):
+        module = Module("module.py",
+        """
+        sprinkler_n = 1
+
+        def some_fun():
+            return "Some Fun"
+
+        sample_dict = {
+            "sprinkler_n_plus_1": sprinkler_n + 1,
+            "sprinkler_n_plus_2": sprinkler_n + 2,
+            "lambda_fun": lambda x: sprinkler_n + x,
+            "fun": some_fun
+        }
+
+        def print_sprinkler():
+            return (f"There is {sprinkler_n} sprinkler."
+             f"({sample_dict['sprinkler_n_plus_1']}, {sample_dict['sprinkler_n_plus_2']})")
+
+        class Car:
+            car_sprinkler_n = sprinkler_n
+        """
+        )
+
+        module.load()
+
+        print_sprinkler_id = id(module.device.print_sprinkler)
+        lambda_fun_id = id(module.device.sample_dict["lambda_fun"])
+        some_fun_id = id(module.device.some_fun)
+        assert module.device.sprinkler_n == 1
+
+        module.replace("sprinkler_n = 1", "sprinkler_n = 2")
+
+        reloader = Reloader(sandbox)
+        reloader.reload(module)
+
+        reloader.assert_actions(
+                "Update: Module: module",
+                "Update: Variable: module.sprinkler_n",
+                "Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_1",
+                "Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_2",
+                "Update: ClassVariable: module.Car.car_sprinkler_n",
+        )
+
+        assert print_sprinkler_id == id(module.device.print_sprinkler)
+        assert module.device.Car.car_sprinkler_n == 2
+        assert lambda_fun_id == id(module.device.sample_dict["lambda_fun"])
+        assert some_fun_id == id(module.device.some_fun)
+        assert module.device.sample_dict == {
+            "sprinkler_n_plus_1": 3,
+            "sprinkler_n_plus_2": 4,
+            "lambda_fun": module.device.sample_dict["lambda_fun"],
+            "fun": module.device.some_fun,
+        }
+
+    def test_deleted_global_var(self, sandbox):
+        module = Module("module.py",
+        """
+        sprinkler_n = 1
+        cars_n = 1
+        """
+        )
+
+        module.load()
+
+        assert hasattr(module.device, "sprinkler_n")
+        assert hasattr(module.device, "cars_n")
+
+        module.delete("sprinkler_n = 1")
+
+        reloader = Reloader(sandbox)
+        reloader.reload(module)
+
+        reloader.assert_actions(
+            "Update: Module: module", "Delete: Variable: module.sprinkler_n"
+        )
+
+        assert not hasattr(module.device, "sprinkler_n")
+        assert hasattr(module.device, "cars_n")
