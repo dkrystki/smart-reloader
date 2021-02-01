@@ -715,7 +715,7 @@ class Module(ContainerObj):
         def execute(self) -> None:
             if self.reloader.is_already_reloaded(self.module.python_obj):
                 return
-            self.reloader.reload(self.module.python_obj)
+            self.reloader.reload(str(self.module.file))
 
         def __repr__(self) -> str:
             return f"Update: {repr(self.module)}"
