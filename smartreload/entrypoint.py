@@ -12,7 +12,7 @@ class SmartReload:
     def __init__(self):
         self.seed_file = Path("__smartreload__.py")
 
-    def create_seed(self, path: str, module: bool, argv: List[str]) -> None:
+    def create_seed(self, path: str, argv: List[str]) -> None:
         source = f"""
         import importlib
         import runpy
@@ -34,6 +34,13 @@ class SmartReload:
         """
         self.seed_file.write_text(dedent(source))
 
+    def get_path_from_module_path(self, module_name: str) -> str:
+        module_path_component = module_name.replace(".", "/") + ".py"
+        for p in sys.path:
+            full_path = Path(p) / module_path_component
+            if full_path.exists():
+                return full_path
+
     def remove_seed(self) -> None:
         def target():
             sleep(0.5)
@@ -49,12 +56,12 @@ class SmartReload:
 
         if "-m" in joined_argv:
             module_name = argv[next(i for i, arg in enumerate(argv) if "-m" in arg) + 1]
-            self.create_seed(module_name, module=True, argv=argv)
+            self.create_seed(self.get_path_from_module_path(module_name), argv=argv)
         else:
             entry_point_source_path = Path(argv[next(i for i, arg in enumerate(argv) if ".py" in arg)])
-            self.create_seed(entry_point_source_path, module=False, argv=argv)
+            self.create_seed(entry_point_source_path, argv=argv)
 
-        # self.remove_seed()
+        self.remove_seed()
         subprocess.run(["python", str(self.seed_file.name)], close_fds=False)
 
 

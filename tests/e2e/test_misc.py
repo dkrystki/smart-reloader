@@ -1,11 +1,14 @@
 from time import sleep
 
+from pytest import mark
+
 from tests import utils
 from tests.utils import Module, Reloader
 
 
 class TestClasses(utils.TestBase):
-    def test_basic(self, sandbox, smartreload):
+    @mark.parametrize("command", ["carwash.py", " -m carwash"])
+    def test_basic(self, sandbox, smartreload, command):
         carwash = Module("carwash.py",
         r"""
         car_colour = "red"
@@ -17,7 +20,7 @@ class TestClasses(utils.TestBase):
         """
         )
 
-        e = smartreload.start("python carwash.py")
+        e = smartreload.start("python " + command)
         e.output(r"Cleaning red car").eval()
         carwash.replace('car_colour = "red"', 'car_colour = "green"')
         sleep(0.2)
