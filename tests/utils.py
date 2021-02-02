@@ -89,10 +89,10 @@ class Module:
 @dataclass
 class Reloader:
     root: Path
-    device: smartreload.Reloader = field(init=False, default=None)
+    device: smartreload.PartialReloader = field(init=False, default=None)
 
     def reload(self, module: Module) -> None:
-        self.device = smartreload.Reloader(self.root, logger)
+        self.device = smartreload.PartialReloader(self.root, logger)
         self.device.reload(str(module._path))
 
     def assert_actions(self, *actions: str) -> None:

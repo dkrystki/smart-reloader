@@ -1,3 +1,4 @@
+import sys
 import errno
 import os
 from logging import getLogger
@@ -9,55 +10,65 @@ from globmatch import glob_match
 from watchdog.events import FileSystemEventHandler, FileSystemEvent, EVENT_TYPE_MODIFIED
 from watchdog.observers import Observer
 
-from smartreload import Reloader
+from smartreload import PartialReloader
 from smartreload.misc import is_linux
 
 
 logger = getLogger(__name__)
 
 
-class Watchdog(FileSystemEventHandler):
-    @dataclass
-    class Sets:
-        include: List[str]
-        exclude: List[str]
-        root: Path
-        name: str = "Anonymous"
-
-    _watch_files = ["**/*.py"]
-    _ignore_files = [r"**/.*", r"**/*~", r"**/__pycache__"]
-
-    def __init__(self, se: Sets, on_event: Callable):
-        self.include = [p.lstrip("./") for p in se.include]
-        self.exclude = [p.lstrip("./") for p in se.exclude]
-        self.root = se.root
-
-        self.reloader = Reloader(root=self.root, logger=logger)
+class Reloader(FileSystemEventHandler):
+    def __init__(self, file_path: str):
+        self.root = Path(file_path).parent
+        self.partial_reloader = PartialReloader(root=self.root, logger=logger)
 
         super().__init__()
-        self.se = se
-        self.on_event = on_event
 
         # self.logger.debug("Starting Inotify")
         self.observer = Observer()
-        self.observer.schedule(self, str(self.se.root), recursive=True)
+        self.observer.schedule(self, str(self.root), recursive=True)
+
+    @property
+    def watch_files(self) -> List[str]:
+        return ["**/*.py"]
+
+    @property
+    def ignore_files(self) -> List[str]:
+        return [r"**/.*", r"**/*~", r"**/__pycache__"]
+
+    @property
+    def fully_reloadable_files(self) -> List[str]:
+        return []
+
+    def trigger_full_reload(self) -> None:
+        sys.exit(0)
+
+    def matches(self, path: Path) -> bool:
+        return not glob_match(str(path), self.ignore_files) and glob_match(str(path), self.watch_files)
 
     def on_any_event(self, event: FileSystemEvent):
-        if event.event_type != EVENT_TYPE_MODIFIED:
+        path = Path(event.src_path)
+
+        if not self.matches(path):
             return
 
-        self.reloader.reload(event.src_path)
+        if glob_match(str(path), self.fully_reloadable_files):
+            self.trigger_full_reload()
+
+        try:
+            self.partial_reloader.reload(path)
+        except:
+            self.trigger_full_reload()
+
+        self.flush()
 
     def flush(self) -> None:
         self.observer.event_queue.queue.clear()
 
-    def match(self, path: str, include: List[str], exclude: List[str]) -> bool:
-        return not glob_match(path, exclude) and glob_match(path, include)
-
     def walk_dirs(self, on_match: Callable) -> None:
         def walk(path: Path):
             for p in path.iterdir():
-                if glob_match(path, self.exclude):
+                if glob_match(path, self.ignore_files):
                     continue
                 on_match(str(p).encode("utf-8"))
                 if p.is_dir():
@@ -106,20 +117,9 @@ class Watchdog(FileSystemEventHandler):
         :type event:
             :class:`FileSystemEvent`
         """
-        from watchdog.utils import has_attribute, unicode_paths
 
-        paths = []
-        if has_attribute(event, "dest_path"):
-            paths.append(unicode_paths.decode(event.dest_path))
-        if event.src_path:
-            paths.append(unicode_paths.decode(event.src_path))
+        if event.event_type != EVENT_TYPE_MODIFIED:
+            return
 
-        if any(
-            self.match(
-                str(Path(p).relative_to(self.root)),
-                include=self.include,
-                exclude=self.exclude,
-            )
-            for p in paths
-        ):
+        if self.matches(Path(event.src_path).relative_to(self.root)):
             super().dispatch(event)

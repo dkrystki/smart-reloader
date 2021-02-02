@@ -17,6 +17,6 @@ console = Console()
 console._force_terminal = True
 
 from . import dependency_watcher
-from .smart_reloader import *
+from .partialreloader import *
 
 dependency_watcher.enable()

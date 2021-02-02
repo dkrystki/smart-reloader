@@ -46,6 +46,13 @@ def _reset():
     path_to_modules = defaultdict(set)
 
 
+def register_module(module: ModuleType) -> None:
+    path_to_modules[module.__file__].add(module)
+    child_modules = [o for o in module.__dict__.values() if hasattr(o, "__file__")]
+    for m in child_modules:
+        path_to_modules[m.__file__].add(m)
+
+
 def _import(name, globals=None, locals=None, fromlist=None, level=_default_level):
     """__import__() replacement function that tracks module dependencies."""
     # Track our current parent module.  This is used to find our current place
@@ -55,9 +62,6 @@ def _import(name, globals=None, locals=None, fromlist=None, level=_default_level
     base = _baseimport(name, globals, locals, fromlist, level)
 
     if hasattr(base, "__file__") and "site-packages" not in base.__file__:
-        path_to_modules[base.__file__].add(base)
-        child_modules = [o for o in base.__dict__.values() if hasattr(o, "__file__")]
-        for m in child_modules:
-            path_to_modules[m.__file__].add(m)
+        register_module(base)
 
     return base

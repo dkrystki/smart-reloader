@@ -22,6 +22,7 @@ def sandbox() -> Path:
 
     if not sandbox_dir.exists():
         sandbox_dir.mkdir()
+        (sandbox_dir / "__init__.py").touch()
     os.chdir(str(sandbox_dir))
 
     return sandbox_dir
