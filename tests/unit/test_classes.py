@@ -4,6 +4,8 @@ from tests.utils import Module, Reloader
 
 class TestClasses(utils.TestBase):
     def test_modified_class_variable_with_dependencies(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
         init = Module("__init__.py",
         """
         from . import carwash
@@ -40,7 +42,6 @@ class TestClasses(utils.TestBase):
 
         carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
 
-        reloader = Reloader(sandbox.parent)
         reloader.reload(carwash)
 
         reloader.assert_actions(
@@ -54,6 +55,8 @@ class TestClasses(utils.TestBase):
         assert car.device.Car.car_sprinklers == 2
 
     def test_modified_class_attr(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
             """
         import math
@@ -94,7 +97,6 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -108,6 +110,8 @@ class TestClasses(utils.TestBase):
         assert print_sprinklers_id == id(module.device.CarwashBase.print_sprinklers)
 
     def test_modified_init_with_super(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
         class CarwashBase:
@@ -133,7 +137,6 @@ class TestClasses(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -145,6 +148,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash(30).car_n == 30
 
     def test_add_base_class(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         class CarwashBase:
@@ -172,7 +177,6 @@ class TestClasses(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -185,6 +189,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash(30).car_n == 30
 
     def test_type_as_attribute(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
             """
         class Carwash:
@@ -197,7 +203,6 @@ class TestClasses(utils.TestBase):
 
         module.replace("name_type = int", "name_type = str")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -208,6 +213,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash.name_type is str
 
     def test_added_class(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         a = 1
@@ -228,7 +235,6 @@ class TestClasses(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions("Update: Module: module", "Add: Class: module.Carwash")
@@ -237,6 +243,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash().print_sprinklers() == 20
 
     def test_recursion(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         class Carwash:
@@ -248,10 +256,11 @@ class TestClasses(utils.TestBase):
 
         module.load()
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
     def test_recursion_two_deep(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         class Carwash:
@@ -266,10 +275,11 @@ class TestClasses(utils.TestBase):
 
         module.load()
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
     def test_added_class_attr(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -297,7 +307,6 @@ class TestClasses(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -308,6 +317,8 @@ class TestClasses(utils.TestBase):
         assert hasattr(module.device.Carwash, "cars_n")
 
     def test_deleted_class_attr(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -335,7 +346,6 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -347,6 +357,8 @@ class TestClasses(utils.TestBase):
         assert not hasattr(module.device.Carwash, "cars_n")
 
     def test_modified_method(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -379,7 +391,6 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -394,6 +405,8 @@ class TestClasses(utils.TestBase):
         assert print_sprinklers_id == id(module.device.Carwash.print_sprinklers)
 
     def test_modified_repr(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -413,7 +426,6 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions("Update: Module: module", "Update: Method: module.Carwash.__repr__")
@@ -421,6 +433,8 @@ class TestClasses(utils.TestBase):
         assert repr(module.device.Carwash()) == "MyCarwash"
 
     def test_uses_other_classes(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Engine:
@@ -476,7 +490,6 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -496,6 +509,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash().car_a.engine_class is module.device.Engine
 
     def test_modified_property(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -526,7 +541,6 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -538,6 +552,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash().cars_n == 5
 
     def test_modified_property_setter(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -556,7 +572,6 @@ class TestClasses(utils.TestBase):
 
         module.replace("self.a = x", "self.a = x + 1")
 
-        reloader = Reloader(sandbox,)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -567,6 +582,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash().sprinklers_n == 10
 
     def test_added_method(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -584,7 +601,6 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -594,6 +610,8 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash().print_sprinklers() == "There are 5 sprinklers."
 
     def test_delete_method(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
                 """
             class Carwash:
@@ -619,10 +637,16 @@ class TestClasses(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions("Update: Module: module", "Delete: Method: module.Carwash.fun2")
 
         assert hasattr(module.device.Carwash, "fun1")
         assert not hasattr(module.device.Carwash, "fun2")
+
+    def test_nest(self, sandbox):
+        assert False
+
+    def test_rolls_back(self, sandbox):
+        assert False
+

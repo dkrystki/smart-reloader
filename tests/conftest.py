@@ -9,6 +9,22 @@ register_assert_rewrite("tests.utils")
 
 
 @fixture
+def env_sandbox() -> Path:
+    environ_before = os.environ.copy()
+
+    yield
+    os.environ = environ_before
+
+
+@fixture
+def modules_sandbox() -> Path:
+    modules_before = sys.modules.copy()
+
+    yield
+    sys.modules = modules_before
+
+
+@fixture
 def sandbox() -> Path:
     pwd = Path(os.environ["PWD"])
 

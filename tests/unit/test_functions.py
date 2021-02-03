@@ -4,6 +4,8 @@ from tests.utils import Module, Reloader
 
 class TestFunctions(utils.TestBase):
     def test_added_function(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module(
             "module.py",
             """
@@ -25,7 +27,6 @@ class TestFunctions(utils.TestBase):
                 """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions("Update: Module: module", "Add: Function: module.fun2")
@@ -36,6 +37,8 @@ class TestFunctions(utils.TestBase):
         assert module.device.fun("str1", "str2") == module.device.fun2("str1", "str2")
 
     def test_modified_function(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module(
             "module.py",
             """
@@ -62,9 +65,7 @@ class TestFunctions(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
-
         reloader.assert_actions(
             "Update: Module: module", "Update: Function: module.fun"
         )
@@ -77,6 +78,8 @@ class TestFunctions(utils.TestBase):
         assert id(module.device.fun) == fun_id_before
 
     def test_deleted_function(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module(
             "module.py",
             """
@@ -100,7 +103,6 @@ class TestFunctions(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -111,6 +113,8 @@ class TestFunctions(utils.TestBase):
         assert not hasattr(module.device, "fun2")
 
     def test_renamed_function(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module(
             "module.py",
             """
@@ -131,9 +135,7 @@ class TestFunctions(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
-
         reloader.assert_actions(
             "Update: Module: module",
             "Add: Function: module.fun_renamed",
@@ -144,6 +146,8 @@ class TestFunctions(utils.TestBase):
         assert hasattr(module.device, "fun_renamed")
 
     def test_uses_class(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module(
             "module.py",
             """
@@ -166,7 +170,6 @@ class TestFunctions(utils.TestBase):
 
         module.replace('car = Car("red")', 'car = Car("green")')
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -182,6 +185,8 @@ class TestFunctions(utils.TestBase):
         assert module.device.fun().colour == "green"
 
     def test_uses_function(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module(
             "module.py",
             """
@@ -198,9 +203,7 @@ class TestFunctions(utils.TestBase):
 
         module.replace("return 5", "return 10")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
-
         reloader.assert_actions(
             "Update: Module: module", "Update: Function: module.other_fun"
         )
@@ -208,6 +211,8 @@ class TestFunctions(utils.TestBase):
         assert module.device.fun() == 20
 
     def test_uses_function_2(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         def other_fun():
@@ -231,9 +236,7 @@ class TestFunctions(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
-
         reloader.assert_actions(
             "Update: Module: module",
             "Update: Function: module.other_fun",
@@ -243,6 +246,8 @@ class TestFunctions(utils.TestBase):
         assert module.device.fun() == 25
 
     def test_uses_added_function(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         def fun():
@@ -263,7 +268,6 @@ class TestFunctions(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
         reloader.assert_actions(
             "Update: Module: module",

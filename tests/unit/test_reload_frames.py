@@ -7,6 +7,8 @@ from tests.utils import Module, Reloader
 
 class TestReloadFrames(utils.TestBase):
     def test_wip(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         from time import sleep
@@ -21,8 +23,6 @@ class TestReloadFrames(utils.TestBase):
         """
         )
         module.load()
-
-        reloader = Reloader(sandbox)
 
         def reload():
             sleep(1)

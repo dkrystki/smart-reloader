@@ -4,13 +4,15 @@ import os
 import sys
 from collections import OrderedDict, defaultdict
 from copy import copy
+from logging import Logger
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent, indent
 from types import ModuleType
 from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type
 
-from . import dependency_watcher, misc
+from . import misc
 
 dataclass = dataclass(repr=False)
 
@@ -45,8 +47,12 @@ class ParentReloadNeeded(Exception):
 class Action:
     reloader: "PartialReloader"
 
+    def log(self) -> None:
+        self.reloader.logger.info(f"Applying {self}")
+
     def pre_execute(self) -> None:
         self.reloader.applied_actions.append(self)
+        self.log()
 
     def __eq__(self, other: "Action") -> bool:
         raise NotImplementedError()
@@ -224,7 +230,7 @@ class Object:
             self.reloader.obj_to_modules[id(self.parent.python_obj)]
         )
         for m in potential_indirect_use_modules:
-            if f"{self.parent.bare_name}.{self.name}" not in inspect.getsource(m):
+            if f"{self.parent.bare_name}.{self.name}" not in Path(m.__file__).read_text():
                 continue
             modules.add(m)
 
@@ -250,7 +256,7 @@ class Object:
         if obj is None:
             return True
 
-        ret = any(type(obj) is p for p in [str, bool, int, float])
+        ret = any(type(obj) is p or obj is p for p in [str, bool, int, float, list, dict, tuple, set])
         return ret
 
     def __eq__(self, other: "Object") -> bool:
@@ -273,7 +279,8 @@ class FinalObj(Object):
             fixed_reference_obj = self.get_python_obj_from_module(
                 self.python_obj, module
             )
-            python_obj.__class__ = fixed_reference_obj.__class__
+            if not self.is_primitive(python_obj):
+                python_obj.__class__ = fixed_reference_obj.__class__
 
         return python_obj
 
@@ -713,9 +720,10 @@ class Module(ContainerObj):
         module: "Module"
 
         def execute(self) -> None:
+            self.log()
             if self.reloader.is_already_reloaded(self.module.python_obj):
                 return
-            self.reloader.reload(str(self.module.file))
+            self.reloader._reload(str(self.module.file))
 
         def __repr__(self) -> str:
             return f"Update: {repr(self.module)}"
@@ -774,8 +782,46 @@ class Dependency:
     objects: Set[Tuple[str, int]]  # name, id
 
 
+class Modules(dict):
+    user_modules: DefaultDict[str, List[ModuleType]]
+
+    def __init__(self, reloader: "PartialReloader", old_dict: Dict[str, ModuleType]) -> None:
+        super().__init__()
+        self.reloader = reloader
+        self._dict = old_dict
+        self.user_modules = defaultdict(list)
+
+    def __setitem__(self, key: str, value: ModuleType) -> None:
+        self._dict.__setitem__(key, value)
+        if not hasattr(value, "__file__"):
+            return
+
+        if self.reloader.root not in Path(value.__file__).parents:
+            return
+
+        self.user_modules[value.__file__].append(value)
+
+    def __getitem__(self, key: str):
+        return self._dict.__getitem__(key)
+
+    def __contains__(self, item):
+        return self._dict.__contains__(item)
+
+    def get(self, *args, **kwargs):
+        return self._dict.get(*args, **kwargs)
+
+    def values(self):
+        return self._dict.values()
+
+    def keys(self):
+        return self._dict.keys()
+
+    def pop(self, *args, **kwargs):
+        return super().pop(*args, **kwargs)
+
+
 class PartialReloader:
-    logger: Any
+    logger: Logger
     named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleType]]
 
     def __init__(self, root: Path, logger: Any) -> None:
@@ -787,7 +833,13 @@ class PartialReloader:
         self.obj_to_modules = defaultdict(set)
         self.applied_actions = []
 
-        self._collect_all_dependencies()
+        self.modules = Modules(self, sys.modules)
+        sys.modules = self.modules
+
+    def _reset(self) -> None:
+        self.named_obj_to_modules = defaultdict(set)
+        self.obj_to_modules = defaultdict(set)
+        self.applied_actions = []
 
     def get_new_module(self, old_module: Module) -> Module:
         module_obj = misc.import_from_file(old_module.file, self.root)
@@ -805,7 +857,7 @@ class PartialReloader:
 
     def get_actions(self, module_file: Path) -> List[Action]:
         actions = []
-        module_objs = dependency_watcher.path_to_modules[str(module_file)]
+        module_objs = self.modules.user_modules[str(module_file)]
 
         for m in module_objs:
             old_module = Module(m, reloader=self, name=f"{m.__name__}")
@@ -823,18 +875,24 @@ class PartialReloader:
             self.obj_to_modules[id(o)].add(module)
 
     def _collect_all_dependencies(self) -> None:
-        for p, modules in copy(dependency_watcher.path_to_modules).items():
+        for p, modules in copy(self.modules.user_modules).items():
             if self.root not in Path(p).parents:
                 continue
             for m in list(modules):
                 self._collect_dependencies(m)
 
-    def reload(self, module_file: Path) -> List[Action]:
-        """
-        :return: True if succeded False i unable to reload
-        """
-
+    def _reload(self, module_file: Path) -> List[Action]:
         for a in self.get_actions(module_file):
             a.execute()
 
         return self.applied_actions
+
+    def reload(self, module_file: Path) -> List[Action]:
+        """
+        :return: True if succeded False i unable to reload
+        """
+        self._reset()
+
+        self._collect_all_dependencies()
+
+        return self._reload(module_file)

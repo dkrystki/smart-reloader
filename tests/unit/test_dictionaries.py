@@ -4,6 +4,8 @@ from tests.utils import Module, Reloader
 
 class TestDictionaries(utils.TestBase):
     def test_change_value(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
             """
         car_data = {
@@ -19,7 +21,6 @@ class TestDictionaries(utils.TestBase):
 
         module.replace('"engine_power": 200','"engine_power": 250')
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -30,6 +31,8 @@ class TestDictionaries(utils.TestBase):
         assert module.device.car_data["engine_power"] == 250
 
     def test_change_key(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
             """
         car_data = {
@@ -45,7 +48,6 @@ class TestDictionaries(utils.TestBase):
 
         module.replace("engine_power", "engine_force")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -58,6 +60,8 @@ class TestDictionaries(utils.TestBase):
         assert module.device.car_data["engine_force"] == 200
 
     def test_change_key_and_value(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
             """
         car_data = {
@@ -73,7 +77,6 @@ class TestDictionaries(utils.TestBase):
 
         module.replace('"engine_power": 200', '"engine_force": 250')
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -86,6 +89,8 @@ class TestDictionaries(utils.TestBase):
         assert module.device.car_data["engine_force"] == 250
 
     def test_add(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         some_var = 1
@@ -107,14 +112,14 @@ class TestDictionaries(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
-
         reloader.assert_actions("Update: Module: module", "Add: Dictionary: module.car_data")
 
         module.assert_obj_in("car_data")
 
     def test_delete(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         some_var = 1
@@ -136,13 +141,14 @@ class TestDictionaries(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
         reloader.assert_actions("Update: Module: module", "Delete: Dictionary: module.car_data")
 
         module.assert_obj_not_in("car_data")
 
     def test_rename(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         some_var = 1
@@ -161,9 +167,7 @@ class TestDictionaries(utils.TestBase):
 
         module.replace("car_data", "car_specs")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
-
         reloader.assert_actions(
         "Update: Module: module",
         "Add: Dictionary: module.car_specs",

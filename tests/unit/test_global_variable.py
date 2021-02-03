@@ -4,6 +4,8 @@ from tests.utils import Module, Reloader
 
 class TestGlobalVariable(utils.TestBase):
     def test_modified_global_var_with_dependencies(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
         init = Module("__init__.py",
         """
         from . import carwash
@@ -66,7 +68,6 @@ class TestGlobalVariable(utils.TestBase):
 
         carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
 
-        reloader = Reloader(sandbox.parent)
         reloader.reload(carwash)
         reloader.assert_actions(
             'Update: Module: sandbox.carwash',
@@ -89,6 +90,8 @@ class TestGlobalVariable(utils.TestBase):
         assert client.device.client_car_sprinklers == 2
 
     def test_modified_import_star(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
         init = Module("__init__.py",
         """
         from . import carwash
@@ -123,7 +126,6 @@ class TestGlobalVariable(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox.parent)
         reloader.reload(carwash)
 
         reloader.assert_actions(
@@ -138,6 +140,8 @@ class TestGlobalVariable(utils.TestBase):
         assert car.device.car_sprinklers == 2
 
     def test_modified_import_star_nested_twice(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
         init = Module("__init__.py",
         """
         from . import carwash
@@ -181,7 +185,6 @@ class TestGlobalVariable(utils.TestBase):
         """
         )
 
-        reloader = Reloader(sandbox.parent)
         reloader.reload(carwash)
 
         reloader.assert_actions(
@@ -198,6 +201,8 @@ class TestGlobalVariable(utils.TestBase):
         assert car.device.car_sprinklers == 2
 
     def test_added_global_var(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         global_var1 = 1
@@ -206,7 +211,6 @@ class TestGlobalVariable(utils.TestBase):
         module.load()
         module.append("global_var2 = 2")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions("Update: Module: module", "Add: Variable: module.global_var2")
@@ -218,6 +222,8 @@ class TestGlobalVariable(utils.TestBase):
         assert module.device.global_var2 == 2
 
     def test_fixes_class_references(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         class Car:
@@ -231,7 +237,6 @@ class TestGlobalVariable(utils.TestBase):
         old_Car_class = module.device.Car
         module.replace("car_class = None", "car_class = Car")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -242,6 +247,8 @@ class TestGlobalVariable(utils.TestBase):
         assert module.device.car_class is module.device.Car
 
     def test_fixes_function_references(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
         module = Module("module.py",
         """
         def fun():
@@ -256,7 +263,6 @@ class TestGlobalVariable(utils.TestBase):
 
         module.replace("car_fun = None", "car_fun = fun")
 
-        reloader = Reloader(sandbox.parent)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -267,6 +273,8 @@ class TestGlobalVariable(utils.TestBase):
         assert module.device.car_fun is module.device.fun
 
     def test_modified_global_var(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         sprinkler_n = 1
@@ -299,7 +307,6 @@ class TestGlobalVariable(utils.TestBase):
 
         module.replace("sprinkler_n = 1", "sprinkler_n = 2")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -322,6 +329,8 @@ class TestGlobalVariable(utils.TestBase):
         }
 
     def test_deleted_global_var(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         sprinkler_n = 1
@@ -336,7 +345,6 @@ class TestGlobalVariable(utils.TestBase):
 
         module.delete("sprinkler_n = 1")
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(

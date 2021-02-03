@@ -1,13 +1,15 @@
+import os
 from time import sleep
 
 from pytest import mark
+import stat
 
 from tests import utils
 from tests.utils import Module, Reloader
 
 
 class TestClasses(utils.TestBase):
-    @mark.parametrize("command", ["carwash.py", " -m carwash"])
+    @mark.parametrize("command", ["python carwash.py", "python -m carwash", "./carwash.py", "carwash.py"])
     def test_basic(self, sandbox, smartreload, command):
         carwash = Module("carwash.py",
         r"""
@@ -19,8 +21,11 @@ class TestClasses(utils.TestBase):
             print(f"Cleaning {car_colour} car")
         """
         )
+        os.environ["PATH"] = f'{str(sandbox.absolute())}:{os.environ["PATH"]}'
 
-        e = smartreload.start("python " + command)
+        carwash.path.chmod(carwash.path.stat().st_mode | stat.S_IEXEC)
+
+        e = smartreload.start(command)
         e.output(r"Cleaning red car").eval()
         carwash.replace('car_colour = "red"', 'car_colour = "green"')
         sleep(0.2)

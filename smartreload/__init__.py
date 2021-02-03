@@ -15,8 +15,9 @@ install()
 
 console = Console()
 console._force_terminal = True
+console.soft_wrap = True
 
-from . import dependency_watcher
+# from . import dependency_watcher
 from .partialreloader import *
 
-dependency_watcher.enable()
+# dependency_watcher.enable()

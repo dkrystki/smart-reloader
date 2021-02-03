@@ -4,6 +4,8 @@ from tests.utils import Module, Reloader
 
 class TestModules(utils.TestBase):
     def test_import_relative(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
         init = Module("__init__.py",
         """
         from . import slave_module
@@ -37,7 +39,6 @@ class TestModules(utils.TestBase):
 
         module.replace("global_var = 2", "global_var = 5")
 
-        reloader = Reloader(sandbox.parent)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -48,6 +49,8 @@ class TestModules(utils.TestBase):
         assert module.device.global_var == 5
 
     def test_added_import(self, sandbox):
+        reloader = Reloader(sandbox)
+
         module = Module("module.py",
         """
         glob_var = 4
@@ -65,7 +68,6 @@ class TestModules(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions("Update: Module: module", "Add: Import: module.math")
@@ -76,6 +78,7 @@ class TestModules(utils.TestBase):
         """
         We don't wanna remove imports because how python handles nested imports.
         """
+        reloader = Reloader(sandbox)
 
         module = Module("module.py",
                 """
@@ -93,7 +96,6 @@ class TestModules(utils.TestBase):
             """
         )
 
-        reloader = Reloader(sandbox)
         reloader.reload(module)
 
         reloader.assert_actions(
@@ -103,6 +105,8 @@ class TestModules(utils.TestBase):
         module.assert_obj_in("math")
 
     def test_add_relative(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
         init = Module("__init__.py",
             """
         from . import slave
@@ -131,7 +135,6 @@ class TestModules(utils.TestBase):
         global_var = 2
         """)
 
-        reloader = Reloader(sandbox.parent)
         reloader.reload(master)
 
         reloader.assert_actions(

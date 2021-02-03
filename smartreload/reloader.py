@@ -2,24 +2,25 @@ import sys
 import errno
 import os
 from logging import getLogger
+import logging
 from pathlib import Path
 from typing import List, Callable
 
-from dataclasses import dataclass
 from globmatch import glob_match
 from watchdog.events import FileSystemEventHandler, FileSystemEvent, EVENT_TYPE_MODIFIED
 from watchdog.observers import Observer
 
-from smartreload import PartialReloader
+from smartreload import PartialReloader, console
 from smartreload.misc import is_linux
+import watchdog.observers.inotify_buffer
 
-
-logger = getLogger(__name__)
+logger = getLogger("Reloader")
+logger.setLevel(logging.INFO)
 
 
 class Reloader(FileSystemEventHandler):
-    def __init__(self, file_path: str):
-        self.root = Path(file_path).parent
+    def __init__(self, root: str):
+        self.root = Path(root)
         self.partial_reloader = PartialReloader(root=self.root, logger=logger)
 
         super().__init__()
@@ -27,6 +28,7 @@ class Reloader(FileSystemEventHandler):
         # self.logger.debug("Starting Inotify")
         self.observer = Observer()
         self.observer.schedule(self, str(self.root), recursive=True)
+        watchdog.observers.inotify_buffer.logger.setLevel("INFO")
 
     @property
     def watch_files(self) -> List[str]:
@@ -57,8 +59,21 @@ class Reloader(FileSystemEventHandler):
 
         try:
             self.partial_reloader.reload(path)
-        except:
-            self.trigger_full_reload()
+        except Exception as e:
+            from rich.traceback import Traceback
+
+            exc_type, exc_value, traceback = sys.exc_info()
+            trace = Traceback.extract(exc_type, exc_value, traceback)
+            trace.stacks[0].frames = trace.stacks[0].frames[-1:]
+            trace.stacks = [trace.stacks[0]]
+            traceback_obj = Traceback(
+                trace=trace,
+                width=800,
+                show_locals=True
+            )
+            console.print(traceback_obj)
+
+            # self.trigger_full_reload()
 
         self.flush()
 

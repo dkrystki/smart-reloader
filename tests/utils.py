@@ -4,8 +4,7 @@ from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 from textwrap import dedent
-from types import ModuleType
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import pytest
 
@@ -22,7 +21,7 @@ def load_module(name: str) -> Any:
 
 class TestBase:
     @pytest.fixture(autouse=True)
-    def setup(self, sandbox):
+    def setup(self, sandbox, modules_sandbox, env_sandbox):
         sys.path.insert(0, str(sandbox.parent))
         dependency_watcher._reset()
 
@@ -41,12 +40,13 @@ class WhatStringNotFound(Exception):
 
 @dataclass
 class Module:
-    path: str
+    path_in: str
     source: str
     device: Optional[Any] = None
+    path: Path = field(init=False)
 
     def __post_init__(self) -> None:
-        self._path = Path(self.path).absolute()
+        self.path = Path(self.path_in).absolute()
         self._fixed_source = dedent(self.source)
         self.write()
 
@@ -59,7 +59,7 @@ class Module:
         self.write()
 
     def write(self):
-        self._path.write_text(self._fixed_source)
+        self.path.write_text(self._fixed_source)
 
     def replace(self, what: str, to: str) -> None:
         if what not in self.source:
@@ -72,10 +72,10 @@ class Module:
         self.replace(what, "")
 
     def load(self) -> None:
-        if self._path.stem != "__init__":
-            name = self._path.stem
+        if self.path.stem != "__init__":
+            name = self.path.stem
         else:
-            name = self._path.parent.absolute().stem
+            name = self.path.parent.absolute().stem
 
         self.device = load_module(name)
 
@@ -91,9 +91,11 @@ class Reloader:
     root: Path
     device: smartreload.PartialReloader = field(init=False, default=None)
 
-    def reload(self, module: Module) -> None:
+    def __post_init__(self):
         self.device = smartreload.PartialReloader(self.root, logger)
-        self.device.reload(str(module._path))
+
+    def reload(self, module: Module) -> None:
+        self.device.reload(module.path)
 
     def assert_actions(self, *actions: str) -> None:
         actions_str = tuple(repr(a) for a in self.device.applied_actions)
