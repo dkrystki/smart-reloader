@@ -89,6 +89,37 @@ class TestGlobalVariable(utils.TestBase):
         assert accounting.device.sprinklers_from_accounting == 20
         assert client.device.client_car_sprinklers == 2
 
+        # Test rollback
+        reloader.rollback()
+
+        assert carwash.device.sprinkler_n == 3
+        assert car.device.sprinkler_n == 3
+        assert car.device.car_sprinklers == 1
+        assert accounting.device.car_sprinklers == 1
+        assert accounting.device.sprinklers_from_accounting == 10
+        assert client.device.client_car_sprinklers == 1
+
+        reloader.assert_actions('Update: Module: sandbox.carwash',
+                                 'Update: Variable: sandbox.carwash.sprinkler_n',
+                                 'Update: Module: sandbox.car',
+                                 'Update: Variable: sandbox.car.sprinkler_n',
+                                 'Update: Variable: sandbox.car.car_sprinklers',
+                                 'Update: Module: sandbox.accounting',
+                                 'Update: Variable: sandbox.accounting.car_sprinklers',
+                                 'Update: Variable: sandbox.accounting.sprinklers_from_accounting',
+                                 'Update: Module: sandbox.client',
+                                 'Update: Variable: sandbox.client.client_car_sprinklers',
+                                 'Rollback: Update: Variable: sandbox.client.client_car_sprinklers',
+                                 'Rollback: Update: Module: sandbox.client',
+                                 'Rollback: Update: Variable: sandbox.accounting.sprinklers_from_accounting',
+                                 'Rollback: Update: Variable: sandbox.accounting.car_sprinklers',
+                                 'Rollback: Update: Module: sandbox.accounting',
+                                 'Rollback: Update: Variable: sandbox.car.car_sprinklers',
+                                 'Rollback: Update: Variable: sandbox.car.sprinkler_n',
+                                 'Rollback: Update: Module: sandbox.car',
+                                 'Rollback: Update: Variable: sandbox.carwash.sprinkler_n',
+                                 'Rollback: Update: Module: sandbox.carwash')
+
     def test_modified_import_star(self, sandbox):
         reloader = Reloader(sandbox.parent)
 
@@ -138,6 +169,12 @@ class TestGlobalVariable(utils.TestBase):
 
         assert carwash.device.sprinkler_n == 6
         assert car.device.car_sprinklers == 2
+
+        # Test rollback
+        reloader.rollback()
+
+        assert carwash.device.sprinkler_n == 3
+        assert car.device.car_sprinklers == 1
 
     def test_modified_import_star_nested_twice(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -200,6 +237,11 @@ class TestGlobalVariable(utils.TestBase):
         assert carwash.device.sprinkler_n == 6
         assert car.device.car_sprinklers == 2
 
+        # Test rollback
+        reloader.rollback()
+        assert carwash.device.sprinkler_n == 3
+        assert car.device.car_sprinklers == 1
+
     def test_added_global_var(self, sandbox):
         reloader = Reloader(sandbox)
 
@@ -220,6 +262,12 @@ class TestGlobalVariable(utils.TestBase):
 
         assert module.device.global_var1 == 1
         assert module.device.global_var2 == 2
+
+        # Test rollback
+        reloader.rollback()
+        assert module.device.global_var1 == 1
+        module.assert_obj_in("global_var1")
+        module.assert_obj_not_in("global_var2")
 
     def test_fixes_class_references(self, sandbox):
         reloader = Reloader(sandbox)
@@ -246,6 +294,11 @@ class TestGlobalVariable(utils.TestBase):
         assert module.device.Car is old_Car_class
         assert module.device.car_class is module.device.Car
 
+        # Test rollback
+        reloader.rollback()
+        assert module.device.Car is old_Car_class
+        assert module.device.car_class is None
+
     def test_fixes_function_references(self, sandbox):
         reloader = Reloader(sandbox.parent)
 
@@ -271,6 +324,11 @@ class TestGlobalVariable(utils.TestBase):
 
         assert module.device.fun is old_fun
         assert module.device.car_fun is module.device.fun
+
+        # Test rollback
+        reloader.rollback()
+        assert module.device.fun is old_fun
+        assert module.device.car_fun is None
 
     def test_modified_global_var(self, sandbox):
         reloader = Reloader(sandbox)
@@ -324,6 +382,21 @@ class TestGlobalVariable(utils.TestBase):
         assert module.device.sample_dict == {
             "sprinkler_n_plus_1": 3,
             "sprinkler_n_plus_2": 4,
+            "lambda_fun": module.device.sample_dict["lambda_fun"],
+            "fun": module.device.some_fun,
+        }
+
+        # Test rollback
+        reloader.rollback()
+        assert module.device.sprinkler_n == 1
+
+        assert print_sprinkler_id == id(module.device.print_sprinkler)
+        assert module.device.Car.car_sprinkler_n == 1
+        assert lambda_fun_id == id(module.device.sample_dict["lambda_fun"])
+        assert some_fun_id == id(module.device.some_fun)
+        assert module.device.sample_dict == {
+            "sprinkler_n_plus_1": 2,
+            "sprinkler_n_plus_2": 3,
             "lambda_fun": module.device.sample_dict["lambda_fun"],
             "fun": module.device.some_fun,
         }

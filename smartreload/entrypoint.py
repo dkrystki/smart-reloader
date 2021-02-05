@@ -13,15 +13,19 @@ class SmartReload:
     def __init__(self):
         self.seed_file = Path("__smartreload__.py")
 
-    def create_seed(self, root: Path, entry_point_file: Path, argv: List[str]) -> None:
+    def create_seed(self, root: Path, entry_point_file: Path, argv: List[str], is_binary: bool) -> None:
+
+        if is_binary:
+            set_module = f"""sys.modules["__smartreloader_entrypoint__"] = module"""
+        else:
+            set_module = f"""sys.modules["{entry_point_file.stem}"] = module"""
+
         source = f"""
         import importlib
-        import runpy
         import sys
 
         
         from smartreload.reloader import Reloader
-        from smartreload.dependency_watcher import register_module
         Reloader("{str(root)}").start()
         
         sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
@@ -29,8 +33,7 @@ class SmartReload:
         loader = importlib.machinery.SourceFileLoader("__main__", "{str(entry_point_file)}")
         spec = importlib.util.spec_from_loader("__main__", loader)
         module = importlib.util.module_from_spec(spec)
-        sys.modules["{entry_point_file.stem}"] = module
-        register_module(module)
+        {set_module}
         loader.exec_module(module)
         """
         self.seed_file.write_text(dedent(source))
@@ -51,7 +54,7 @@ class SmartReload:
 
     def remove_seed(self) -> None:
         def target():
-            sleep(0.5)
+            sleep(2.0)
             self.seed_file.unlink()
 
         Thread(target=target).start()
@@ -65,19 +68,20 @@ class SmartReload:
         # if call as executable
         if "python" not in argv:
             entry_point_source_path = self.get_path_from_binary(argv[0])
-            self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_source_path, argv=argv)
+            self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_source_path, argv=argv, is_binary=True)
         else:
             if "-m" in joined_argv:
                 module_name = argv[next(i for i, arg in enumerate(argv) if "-m" in arg) + 1]
                 entry_point_file = self.get_path_from_module_path(module_name)
-                self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv)
+                self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv, is_binary=False)
             else:
                 entry_point_file = Path(argv[next(i for i, arg in enumerate(argv) if ".py" in arg)])
                 entry_point_file = entry_point_file.absolute()
-                self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv)
+                self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv, is_binary=False)
 
-        # self.remove_seed()
-        subprocess.run(["python", str(self.seed_file.name)], close_fds=False, env=os.environ)
+        self.remove_seed()
+        proc = subprocess.Popen(["python", str(self.seed_file.name)])
+        proc.communicate()
 
 
 def _main() -> None:

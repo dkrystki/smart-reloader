@@ -21,6 +21,12 @@ def modules_sandbox() -> Path:
     modules_before = sys.modules.copy()
 
     yield
+
+    diff = sys.modules.keys() - modules_before.keys()
+
+    for m in diff:
+        del sys.modules[m]
+
     sys.modules = modules_before
 
 

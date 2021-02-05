@@ -9,7 +9,6 @@ from typing import Any, Optional
 import pytest
 
 import smartreload
-from smartreload import dependency_watcher
 
 logger = getLogger(__name__)
 
@@ -23,11 +22,6 @@ class TestBase:
     @pytest.fixture(autouse=True)
     def setup(self, sandbox, modules_sandbox, env_sandbox):
         sys.path.insert(0, str(sandbox.parent))
-        dependency_watcher._reset()
-
-        for n, m in sys.modules.copy().items():
-            if hasattr(m, "__file__") and Path(m.__file__).parent == sandbox:
-                sys.modules.pop(n)
 
         yield
 
@@ -96,6 +90,9 @@ class Reloader:
 
     def reload(self, module: Module) -> None:
         self.device.reload(module.path)
+
+    def rollback(self) -> None:
+        self.device.rollback()
 
     def assert_actions(self, *actions: str) -> None:
         actions_str = tuple(repr(a) for a in self.device.applied_actions)

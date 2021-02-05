@@ -644,9 +644,94 @@ class TestClasses(utils.TestBase):
         assert hasattr(module.device.Carwash, "fun1")
         assert not hasattr(module.device.Carwash, "fun2")
 
-    def test_nest(self, sandbox):
-        assert False
+    def test_add_nested(self, sandbox):
+        reloader = Reloader(sandbox)
 
-    def test_rolls_back(self, sandbox):
-        assert False
+        module = Module("module.py",
+            """
+        class Carwash:
+            name: str = "carwash"
+        """
+        )
 
+        module.load()
+
+        module.rewrite(
+            """
+        class Carwash:
+            class Meta:
+                car_numbers: int = 5
+            
+            name: str = "carwash"
+        """
+        )
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: module', 'Add: Class: module.Carwash.Meta')
+        assert hasattr(module.device.Carwash, "Meta")
+
+    def test_modify_nested(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module("module.py",
+            """
+        class Carwash:
+            class Meta:
+                car_numbers: int = 5
+            
+            name: str = "carwash"
+        """
+            )
+
+        module.load()
+
+        carwash_class_id = id(module.device.Carwash)
+        carwash_meta_class_id = id(module.device.Carwash.Meta)
+
+        module.rewrite(
+            """
+        class Carwash:
+            class Meta:
+                car_numbers: int = 15
+
+            name: str = "carwash"
+        """
+        )
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: module',
+ 'Update: ClassVariable: module.Carwash.Meta.car_numbers')
+        assert id(module.device.Carwash) == carwash_class_id
+        assert id(module.device.Carwash.Meta) == carwash_meta_class_id
+
+    def test_delete_nested(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module("module.py",
+            """
+        class Carwash:
+            class Meta:
+                car_numbers: int = 5
+
+            name: str = "carwash"
+        """
+            )
+
+        module.load()
+
+        assert hasattr(module.device.Carwash, "Meta")
+
+        module.rewrite(
+            """
+        class Carwash:
+            name: str = "carwash"
+        """
+        )
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: module', 'Delete: Class: module.Carwash.Meta')
+
+        assert not hasattr(module.device.Carwash, "Meta")

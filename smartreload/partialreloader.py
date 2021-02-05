@@ -45,18 +45,24 @@ class ParentReloadNeeded(Exception):
 
 @dataclass
 class Action:
+    object: "Object"
     reloader: "PartialReloader"
 
     def log(self) -> None:
-        self.reloader.logger.info(f"Applying {self}")
+        self.reloader.logger.info(str(self))
 
     def pre_execute(self) -> None:
         self.reloader.applied_actions.append(self)
         self.log()
 
+    def rollback(self) -> None:
+        pass
+
     def __eq__(self, other: "Action") -> bool:
         raise NotImplementedError()
 
+    def execute(self) -> None:
+        raise NotImplementedError()
 
 @dataclass
 class Object:
@@ -72,23 +78,38 @@ class Object:
             self.pre_execute()
             setattr(self.parent.python_obj, self.object.name, self.object.python_obj)
 
+        def rollback(self) -> None:
+            super().rollback()
+            delattr(
+                self.parent.python_obj,
+                self.object.name,
+            )
+
     @dataclass
     class Update(Action):
         parent: Optional["ContainerObj"]
-        old_object: "Object"
+        object: "Object"
         new_object: Optional["Object"]
 
         def __repr__(self) -> str:
-            return f"Update: {repr(self.old_object)}"
+            return f"Update: {repr(self.object)}"
 
         def execute(self) -> None:
             self.pre_execute()
-            python_obj = self.new_object.get_fixed_reference(self.old_object.module)
+            python_obj = self.new_object.get_fixed_reference(self.object.module)
 
             setattr(
-                self.old_object.parent.python_obj,
-                self.old_object.name,
+                self.object.parent.python_obj,
+                self.object.name,
                 python_obj,
+            )
+
+        def rollback(self) -> None:
+            super().rollback()
+            setattr(
+                self.object.parent.python_obj,
+                self.object.name,
+                self.object.python_obj,
             )
 
     @dataclass
@@ -102,6 +123,25 @@ class Object:
         def execute(self) -> None:
             self.pre_execute()
             delattr(self.parent.python_obj, self.object.name)
+
+        def rollback(self) -> None:
+            super().rollback()
+            setattr(
+                self.parent.python_obj,
+                self.object.name,
+                self.object.python_obj,
+            )
+
+    @dataclass
+    class Rollback(Action):
+        action: Action
+
+        def __repr__(self) -> str:
+            return f"Rollback: {repr(self.action)}"
+
+        def execute(self) -> None:
+            self.pre_execute()
+            self.action.rollback()
 
     python_obj: Any
     reloader: "PartialReloader"
@@ -125,7 +165,7 @@ class Object:
             self.Update(
                 reloader=self.reloader,
                 parent=self.parent,
-                old_object=self,
+                object=self,
                 new_object=new_object,
             )
         ]
@@ -248,7 +288,7 @@ class Object:
 
         for m in modules:
             module = Module(m, reloader=self.reloader)
-            ret.append(Module.Update(self.reloader, module))
+            ret.append(Module.Update(reloader=self.reloader, object=module))
 
         return ret
 
@@ -295,13 +335,13 @@ class Reference(FinalObj):
 @dataclass
 class Function(FinalObj):
     class Update(FinalObj.Update):
-        old_object: "Function"
+        object: "Function"
         new_object: Optional["Function"]
 
         def execute(self) -> None:
             self.pre_execute()
-            self.old_object.get_func(
-                self.old_object.python_obj
+            self.object.get_func(
+                self.object.python_obj
             ).__code__ = self.new_object.get_func(self.new_object.python_obj).__code__
 
     def get_actions_for_update(self, new_object: "Function") -> List["Action"]:
@@ -310,7 +350,7 @@ class Function(FinalObj):
                 self.Update(
                     reloader=self.reloader,
                     parent=self.parent,
-                    old_object=self,
+                    object=self,
                     new_object=new_object,
                 )
             ]
@@ -489,7 +529,14 @@ class Class(ContainerObj):
 
         def execute(self) -> None:
             self.pre_execute()
-            exec(self.object.source, self.parent.module.python_obj.__dict__)
+            source = dedent(self.object.source)
+
+            if isinstance(self.parent, Class):
+                context = dict(self.parent.python_obj.__dict__)
+                exec(source, self.parent.module.python_obj.__dict__, context)
+                setattr(self.parent.python_obj, self.object.name, context[self.object.name])
+            else:
+                exec(source, self.parent.module.python_obj.__dict__)
 
     def get_actions_for_update(self, new_object: "Class") -> List["Action"]:
         if str(self.python_obj.__mro__) == str(new_object.python_obj.__mro__):
@@ -559,8 +606,8 @@ class Method(Function):
     class Update(Function.Update):
         def execute(self) -> None:
             self.pre_execute()
-            self.old_object.get_func(
-                self.old_object.python_obj
+            self.object.get_func(
+                self.object.python_obj
             ).__code__ = self.new_object.get_func(self.new_object.python_obj).__code__
 
     @classmethod
@@ -621,7 +668,7 @@ class ClassVariable(Variable):
             self.Update(
                 reloader=self.reloader,
                 parent=self.parent,
-                old_object=self,
+                object=self,
                 new_object=new_object,
             )
         ]
@@ -651,12 +698,22 @@ class DictionaryItem(FinalObj):
             self.pre_execute()
             self.parent.python_obj[self.object.name] = copy(self.object.python_obj)
 
+        def rollback(self) -> None:
+            self.pre_execute()
+            del self.parent.python_obj[self.object.name]
+
     class Update(FinalObj.Update):
         def execute(self) -> None:
             self.pre_execute()
-            self.old_object.parent.python_obj[
+            self.object.parent.python_obj[
                 self.new_object.name
             ] = self.new_object.python_obj
+
+        def rollback(self) -> None:
+            self.pre_execute()
+            self.object.parent.python_obj[
+                self.new_object.name
+            ] = self.object.python_obj
 
     class Delete(FinalObj.Delete):
         parent: Optional["ContainerObj"]
@@ -665,6 +722,10 @@ class DictionaryItem(FinalObj):
         def execute(self) -> None:
             self.pre_execute()
             del self.parent.python_obj[self.object.name]
+
+        def rollback(self) -> None:
+            self.pre_execute()
+            self.parent.python_obj[self.object.name] = self.object.python_obj
 
     def get_actions_for_update(self, new_object: "Variable") -> List["Action"]:
 
@@ -675,7 +736,7 @@ class DictionaryItem(FinalObj):
             self.Update(
                 reloader=self.reloader,
                 parent=self.parent,
-                old_object=self,
+                object=self,
                 new_object=new_object,
             )
         ]
@@ -717,16 +778,14 @@ class Module(ContainerObj):
 
     @dataclass
     class Update(Action):
-        module: "Module"
-
         def execute(self) -> None:
             self.log()
-            if self.reloader.is_already_reloaded(self.module.python_obj):
+            if self.reloader.is_already_reloaded(self.object.python_obj):
                 return
-            self.reloader._reload(str(self.module.file))
+            self.reloader._reload(str(self.object.file))
 
         def __repr__(self) -> str:
-            return f"Update: {repr(self.module)}"
+            return f"Update: {repr(self.object)}"
 
     def __post_init__(self) -> None:
         self.module = self
@@ -817,7 +876,16 @@ class Modules(dict):
         return self._dict.keys()
 
     def pop(self, *args, **kwargs):
-        return super().pop(*args, **kwargs)
+        return self._dict.pop(*args, **kwargs)
+
+    def __delattr__(self, item):
+        return self._dict.__delattr__(item)
+
+    def __delete__(self, instance):
+        return self._dict.__delete__(instance)
+
+    def __delitem__(self, *args, **kwargs):
+        return self._dict.__delitem__(*args, **kwargs)
 
 
 class PartialReloader:
@@ -845,14 +913,14 @@ class PartialReloader:
         module_obj = misc.import_from_file(old_module.file, self.root)
 
         return Module(
-            module_obj,
+            python_obj=module_obj,
             reloader=self,
             name=old_module.name,
         )
 
     def is_already_reloaded(self, module: ModuleType) -> bool:
         for a in [a for a in self.applied_actions if isinstance(a, Module.Update)]:
-            if a.module.python_obj is module:
+            if a.object.python_obj is module:
                 return True
 
     def get_actions(self, module_file: Path) -> List[Action]:
@@ -860,8 +928,8 @@ class PartialReloader:
         module_objs = self.modules.user_modules[str(module_file)]
 
         for m in module_objs:
-            old_module = Module(m, reloader=self, name=f"{m.__name__}")
-            self.applied_actions.append(Module.Update(self, old_module))
+            old_module = Module(python_obj=m, reloader=self, name=f"{m.__name__}")
+            self.applied_actions.append(Module.Update(reloader=self, object=old_module))
 
             new_module = self.get_new_module(old_module)
             actions.extend(old_module.get_actions_for_update(new_module))
@@ -896,3 +964,9 @@ class PartialReloader:
         self._collect_all_dependencies()
 
         return self._reload(module_file)
+
+    def rollback(self) -> None:
+        rollback_actions = [a.object.Rollback(reloader=self, action=a, object=a.object) for a in reversed(self.applied_actions)]
+
+        for a in rollback_actions:
+            a.execute()
