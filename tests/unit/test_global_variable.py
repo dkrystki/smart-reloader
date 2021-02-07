@@ -1,3 +1,5 @@
+from pytest import raises
+
 from tests import utils
 from tests.utils import Module, Reloader
 
@@ -425,4 +427,9 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         assert not hasattr(module.device, "sprinkler_n")
+        assert hasattr(module.device, "cars_n")
+
+        # Test rollback
+        reloader.rollback()
+        assert hasattr(module.device, "sprinkler_n")
         assert hasattr(module.device, "cars_n")

@@ -57,23 +57,9 @@ class Reloader(FileSystemEventHandler):
         if glob_match(str(path), self.fully_reloadable_files):
             self.trigger_full_reload()
 
-        try:
-            self.partial_reloader.reload(path)
-        except Exception as e:
-            from rich.traceback import Traceback
 
-            exc_type, exc_value, traceback = sys.exc_info()
-            trace = Traceback.extract(exc_type, exc_value, traceback)
-            trace.stacks[0].frames = trace.stacks[0].frames[-1:]
-            trace.stacks = [trace.stacks[0]]
-            traceback_obj = Traceback(
-                trace=trace,
-                width=800,
-                show_locals=True
-            )
-            console.print(traceback_obj)
-
-            # self.trigger_full_reload()
+        self.partial_reloader.reload(path)
+        # self.trigger_full_reload()
 
         self.flush()
 

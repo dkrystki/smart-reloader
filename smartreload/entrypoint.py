@@ -4,7 +4,7 @@ from pathlib import Path
 from textwrap import dedent
 from threading import Thread
 from time import sleep
-from typing import List
+from typing import List, Optional
 import os
 
 
@@ -38,19 +38,23 @@ class SmartReload:
         """
         self.seed_file.write_text(dedent(source))
 
-    def get_path_from_module_path(self, module_name: str) -> Path:
+    def get_path_from_module_path(self, module_name: str) -> Optional[Path]:
         module_path_component = module_name.replace(".", "/") + ".py"
         for p in sys.path:
             full_path = Path(p) / module_path_component
             if full_path.exists():
                 return full_path.absolute()
 
-    def get_path_from_binary(self, binary_name: str) -> Path:
+        return None
+
+    def get_path_from_binary(self, binary_name: str) -> Optional[Path]:
         paths = os.environ["PATH"].split(":")
         for p in paths:
             full_path = Path(p) / binary_name
             if full_path.exists():
                 return full_path.absolute()
+
+        return None
 
     def remove_seed(self) -> None:
         def target():
@@ -61,23 +65,21 @@ class SmartReload:
 
     def main(self):
         argv = sys.argv[1:]
-        joined_argv = " ".join(argv)
 
-        entry_point_source: str
+        entry_point_file: Optional[Path] = None
 
         # if call as executable
         if "python" not in argv:
-            entry_point_source_path = self.get_path_from_binary(argv[0])
-            self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_source_path, argv=argv, is_binary=True)
-        else:
-            if "-m" in joined_argv:
-                module_name = argv[next(i for i, arg in enumerate(argv) if "-m" in arg) + 1]
-                entry_point_file = self.get_path_from_module_path(module_name)
-                self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv, is_binary=False)
-            else:
-                entry_point_file = Path(argv[next(i for i, arg in enumerate(argv) if ".py" in arg)])
-                entry_point_file = entry_point_file.absolute()
-                self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv, is_binary=False)
+            entry_point_file = self.get_path_from_binary(argv[0])
+
+        if not entry_point_file:
+            module_name = argv[0]
+            entry_point_file = self.get_path_from_module_path(module_name)
+
+        if not entry_point_file:
+            entry_point_file = Path(argv[0])
+
+        self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv, is_binary=True)
 
         self.remove_seed()
         proc = subprocess.Popen(["python", str(self.seed_file.name)])

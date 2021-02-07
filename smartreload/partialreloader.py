@@ -1,6 +1,7 @@
 import ast
 import inspect
 import os
+import re
 import sys
 from collections import OrderedDict, defaultdict
 from copy import copy
@@ -9,10 +10,10 @@ from logging import Logger
 from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent, indent
-from types import ModuleType
-from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type
+from types import ModuleType, CodeType
+from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, ClassVar
 
-from . import misc
+from . import misc, console
 
 dataclass = dataclass(repr=False)
 
@@ -47,6 +48,7 @@ class ParentReloadNeeded(Exception):
 class Action:
     object: "Object"
     reloader: "PartialReloader"
+    priority: ClassVar[int] = field(init=False, default=100)
 
     def log(self) -> None:
         self.reloader.logger.info(str(self))
@@ -76,14 +78,11 @@ class Object:
 
         def execute(self) -> None:
             self.pre_execute()
-            setattr(self.parent.python_obj, self.object.name, self.object.python_obj)
+            self.parent.set_attr(self.object.name, self.object.python_obj)
 
         def rollback(self) -> None:
             super().rollback()
-            delattr(
-                self.parent.python_obj,
-                self.object.name,
-            )
+            self.parent.del_attr(self.object.name)
 
     @dataclass
     class Update(Action):
@@ -98,19 +97,11 @@ class Object:
             self.pre_execute()
             python_obj = self.new_object.get_fixed_reference(self.object.module)
 
-            setattr(
-                self.object.parent.python_obj,
-                self.object.name,
-                python_obj,
-            )
+            self.object.parent.set_attr(self.object.name, python_obj)
 
         def rollback(self) -> None:
             super().rollback()
-            setattr(
-                self.object.parent.python_obj,
-                self.object.name,
-                self.object.python_obj,
-            )
+            self.object.parent.set_attr(self.object.name, self.object.python_obj)
 
     @dataclass
     class Delete(Action):
@@ -122,15 +113,11 @@ class Object:
 
         def execute(self) -> None:
             self.pre_execute()
-            delattr(self.parent.python_obj, self.object.name)
+            self.parent.del_attr(self.object.name)
 
         def rollback(self) -> None:
             super().rollback()
-            setattr(
-                self.parent.python_obj,
-                self.object.name,
-                self.object.python_obj,
-            )
+            self.parent.set_attr(self.object.name, self.object.python_obj)
 
     @dataclass
     class Rollback(Action):
@@ -307,6 +294,9 @@ class Object:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}: {self.full_name}"
+
+    def get_flat_repr(self) -> Dict[str, "Object"]:
+        return {self.full_name: self}
 
 
 @dataclass
@@ -519,6 +509,21 @@ class ContainerObj(Object):
 
         return ret
 
+    def set_attr(self, name: str, obj: "Any") -> None:
+        setattr(self.python_obj, name, obj)
+
+    def del_attr(self, name: str) -> None:
+        delattr(self.python_obj, name)
+
+    def get_flat_repr(self) -> Dict[str, Object]:
+        ret = {}
+        for o in self.children.values():
+            ret.update(o.get_flat_repr())
+
+        ret.update({self.full_name: self})
+
+        return ret
+
 
 @dataclass
 class Class(ContainerObj):
@@ -534,16 +539,13 @@ class Class(ContainerObj):
             if isinstance(self.parent, Class):
                 context = dict(self.parent.python_obj.__dict__)
                 exec(source, self.parent.module.python_obj.__dict__, context)
-                setattr(self.parent.python_obj, self.object.name, context[self.object.name])
+                self.parent.set_attr(self.object.name, context[self.object.name])
             else:
                 exec(source, self.parent.module.python_obj.__dict__)
 
     def get_actions_for_update(self, new_object: "Class") -> List["Action"]:
         if str(self.python_obj.__mro__) == str(new_object.python_obj.__mro__):
-            try:
-                return super().get_actions_for_update(new_object)
-            except ParentReloadNeeded:
-                return self.get_full_reload_actions()
+            return super().get_actions_for_update(new_object)
         else:
             return self.get_full_reload_actions()
 
@@ -568,7 +570,7 @@ class Class(ContainerObj):
         if id(obj) in self.module.python_obj_to_objs and not self.is_primitive(obj):
             return {name: Reference}
 
-        if inspect.ismethoddescriptor(obj):
+        if isinstance(obj, classmethod):
             return {name: ClassMethod}
 
         if inspect.isfunction(obj):
@@ -600,31 +602,67 @@ class Class(ContainerObj):
 class Method(Function):
     @dataclass
     class Add(Function.Add):
-        def execute(self) -> None:
-            super().execute()
+        object: "Method"
+        parent: "Class"
 
-    class Update(Function.Update):
         def execute(self) -> None:
             self.pre_execute()
-            self.object.get_func(
-                self.object.python_obj
-            ).__code__ = self.new_object.get_func(self.new_object.python_obj).__code__
+            fun = self.object.get_fixed_fun(self.object.python_obj, self.parent)
+            fun.__code__ = self.object.get_code_with_source_file_info(fun, self.object)
+            setattr(self.parent.python_obj, self.object.name, fun)
+
+    class Update(Function.Update):
+        object: "Method"
+        new_object: Optional["Method"]
+        parent: "Class"
+
+        def execute(self) -> None:
+            self.pre_execute()
+            fun = self.object.get_fixed_fun(self.new_object.python_obj, self.parent)
+            code = self.object.get_code_with_source_file_info(fun, self.new_object)
+            self.object.python_obj.__code__ = code
 
     @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj
 
-    def get_actions_for_add(
-        self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
-    ) -> List["Action"]:
-        if hasattr(parent.python_obj, self.name):
-            if (
-                getattr(parent.python_obj, self.name).__code__.co_freevars
-                != obj.python_obj.__code__.co_freevars
-            ):
-                raise ParentReloadNeeded()
+    def get_fixed_fun(self, fun: Callable, parent_class: Class) -> Callable:
+        source = dedent(inspect.getsource(fun))
+        source = re.sub(r"super\(\s*\)", f"super({parent_class.name}, self)", source)
+        source = indent(source, "    " * 4)
 
-        return super().get_actions_for_add(reloader, parent, obj)
+        builder = dedent(
+            f"""
+            def builder():
+                __class__ = {parent_class.name}\n{source}
+                return {self.name}
+            """)
+
+        context = dict(parent_class.module.python_obj.__dict__)
+        exec(builder, context)
+
+        fixed_fun = context["builder"]()
+        return fixed_fun
+
+    def get_code_with_source_file_info(self, fun: Any, new_object: "Method") -> CodeType:
+        code = CodeType(
+            fun.__code__.co_argcount,  # integer
+            fun.__code__.co_kwonlyargcount,  # integer
+            fun.__code__.co_nlocals,  # integer
+            fun.__code__.co_stacksize,  # integer
+            fun.__code__.co_flags,  # integer
+            fun.__code__.co_code,  # bytes
+            fun.__code__.co_consts,  # tuple
+            fun.__code__.co_names,  # tuple
+            fun.__code__.co_varnames,  # tuple
+            self.python_obj.__code__.co_filename,  # string
+            fun.__code__.co_name,  # string
+            new_object.python_obj.__code__.co_firstlineno,  # integer
+            new_object.python_obj.__code__.co_lnotab,  # bytes
+            self.python_obj.__code__.co_freevars,  # tuple
+            fun.__code__.co_cellvars  # tuple
+        )
+        return code
 
 
 @dataclass
@@ -646,6 +684,12 @@ class Dictionary(ContainerObj):
             return {name: Dictionary}
 
         return {name: DictionaryItem}
+
+    def set_attr(self, name: str, obj: "Any") -> None:
+        self.python_obj[name] = obj
+
+    def del_attr(self, name: str) -> None:
+        del self.python_obj[name]
 
 
 @dataclass
@@ -693,40 +737,6 @@ class ClassVariable(Variable):
 
 @dataclass
 class DictionaryItem(FinalObj):
-    class Add(FinalObj.Add):
-        def execute(self) -> None:
-            self.pre_execute()
-            self.parent.python_obj[self.object.name] = copy(self.object.python_obj)
-
-        def rollback(self) -> None:
-            self.pre_execute()
-            del self.parent.python_obj[self.object.name]
-
-    class Update(FinalObj.Update):
-        def execute(self) -> None:
-            self.pre_execute()
-            self.object.parent.python_obj[
-                self.new_object.name
-            ] = self.new_object.python_obj
-
-        def rollback(self) -> None:
-            self.pre_execute()
-            self.object.parent.python_obj[
-                self.new_object.name
-            ] = self.object.python_obj
-
-    class Delete(FinalObj.Delete):
-        parent: Optional["ContainerObj"]
-        object: "Object"
-
-        def execute(self) -> None:
-            self.pre_execute()
-            del self.parent.python_obj[self.object.name]
-
-        def rollback(self) -> None:
-            self.pre_execute()
-            self.parent.python_obj[self.object.name] = self.object.python_obj
-
     def get_actions_for_update(self, new_object: "Variable") -> List["Action"]:
 
         if self.safe_compare(new_object):
@@ -778,6 +788,8 @@ class Module(ContainerObj):
 
     @dataclass
     class Update(Action):
+        priority = 50
+
         def execute(self) -> None:
             self.log()
             if self.reloader.is_already_reloaded(self.object.python_obj):
@@ -833,6 +845,13 @@ class Module(ContainerObj):
 
     def __repr__(self) -> str:
         return f"Module: {self.python_obj.__name__}"
+
+    def get_flat_repr(self) -> Dict[str, Object]:
+        ret = {self.name: self}
+        for o in self.children.values():
+            ret.update(o.get_flat_repr())
+
+        return ret
 
 
 @dataclass
@@ -910,10 +929,13 @@ class PartialReloader:
         self.applied_actions = []
 
     def get_new_module(self, old_module: Module) -> Module:
+        trace = sys.gettrace()
+        sys.settrace(None)
         module_obj = misc.import_from_file(old_module.file, self.root)
+        sys.settrace(trace)
 
         return Module(
-            python_obj=module_obj,
+            module_obj,
             reloader=self,
             name=old_module.name,
         )
@@ -933,6 +955,8 @@ class PartialReloader:
 
             new_module = self.get_new_module(old_module)
             actions.extend(old_module.get_actions_for_update(new_module))
+
+        actions.sort(key= lambda a: a.priority, reverse=True)
         return actions
 
     def _collect_dependencies(self, module: ModuleType) -> None:
@@ -949,13 +973,11 @@ class PartialReloader:
             for m in list(modules):
                 self._collect_dependencies(m)
 
-    def _reload(self, module_file: Path) -> List[Action]:
+    def _reload(self, module_file: Path) -> None:
         for a in self.get_actions(module_file):
             a.execute()
 
-        return self.applied_actions
-
-    def reload(self, module_file: Path) -> List[Action]:
+    def reload(self, module_file: Path) -> None:
         """
         :return: True if succeded False i unable to reload
         """
@@ -963,7 +985,23 @@ class PartialReloader:
 
         self._collect_all_dependencies()
 
-        return self._reload(module_file)
+        try:
+            self._reload(module_file)
+        except Exception as e:
+            from rich.traceback import Traceback
+
+            exc_type, exc_value, traceback = sys.exc_info()
+            trace = Traceback.extract(exc_type, exc_value, traceback)
+            trace.stacks[0].frames = trace.stacks[0].frames[-1:]
+            trace.stacks = [trace.stacks[0]]
+            traceback_obj = Traceback(
+                trace=trace,
+                width=800,
+                show_locals=True
+            )
+            console.print(traceback_obj)
+
+            self.rollback()
 
     def rollback(self) -> None:
         rollback_actions = [a.object.Rollback(reloader=self, action=a, object=a.object) for a in reversed(self.applied_actions)]

@@ -144,3 +144,44 @@ class TestModules(utils.TestBase):
                 )
 
         master.assert_obj_in("slave")
+
+    def test_error_rolls_back(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module("__init__.py",
+                      """
+                      from . import module
+                      from . import slave_module
+                      """
+                      )
+
+        slave_module = Module("slave_module.py",
+                              """
+                              from .module import global_var
+                              slave_global_var = 6 / global_var
+                              """
+                              )
+
+        module = Module("module.py",
+                        """
+                        global_var = 2
+                        """
+                        )
+        init.load()
+
+        slave_module.device = init.device.slave_module
+        module.device = init.device.module
+
+        module.rewrite("global_var = 0")
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: sandbox.module',
+                                'Update: Variable: sandbox.module.global_var',
+                                'Update: Module: sandbox.slave_module',
+                                'Rollback: Update: Module: sandbox.slave_module',
+                                'Rollback: Update: Variable: sandbox.module.global_var',
+                                'Rollback: Update: Module: sandbox.module')
+
+        assert module.device.global_var == 2
+        assert slave_module.device.slave_global_var == 3

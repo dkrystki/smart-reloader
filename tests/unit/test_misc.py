@@ -5,7 +5,7 @@ from tests.utils import Module, Reloader
 
 
 class TestMisc(utils.TestBase):
-    def test_syntax_error(self, sandbox):
+    def test_syntax_error(self, sandbox, capsys):
         reloader = Reloader(sandbox)
 
         module = Module("module.py",
@@ -22,10 +22,11 @@ class TestMisc(utils.TestBase):
         """
         )
 
-        with pytest.raises(SyntaxError):
-            reloader.reload(module)
+        reloader.reload(module)
 
-    def test_other_error(self, sandbox):
+        assert "SyntaxError: invalid syntax" in capsys.readouterr().out
+
+    def test_other_error(self, sandbox, capsys):
         reloader = Reloader(sandbox)
 
         module = Module("module.py",
@@ -42,5 +43,6 @@ class TestMisc(utils.TestBase):
         """
         )
 
-        with pytest.raises(ZeroDivisionError):
-            reloader.reload(module)
+        reloader.reload(module)
+
+        assert "ZeroDivisionError" in capsys.readouterr().out

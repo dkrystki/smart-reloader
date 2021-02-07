@@ -1,3 +1,5 @@
+from numpy.testing import raises
+
 from tests import utils
 from tests.utils import Module, Reloader
 
@@ -109,7 +111,7 @@ class TestClasses(utils.TestBase):
         assert module.device.Carwash.sprinklers_n == 77
         assert print_sprinklers_id == id(module.device.CarwashBase.print_sprinklers)
 
-    def test_modified_init_with_super(self, sandbox):
+    def test_add_init_with_super(self, sandbox):
         reloader = Reloader(sandbox)
 
         module = Module("module.py",
@@ -124,6 +126,8 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
+        base_init_id = id(module.device.CarwashBase.__init__)
+
         module.rewrite(
                 """
         class CarwashBase:
@@ -138,14 +142,52 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-
-        reloader.assert_actions(
-            "Update: Module: module",
-            "Delete: Class: module.Carwash",
-            "Add: Class: module.Carwash"
-        )
+        reloader.assert_actions('Update: Module: module', 'Add: Method: module.Carwash.__init__')
 
         assert module.device.Carwash(30).car_n == 30
+
+        assert base_init_id == id(module.device.CarwashBase.__init__)
+
+    def test_modified_init_with_super(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module("module.py",
+                """
+        class CarwashBase:
+            def __init__(self) -> None:
+                self.car_n = 10
+
+        class Carwash(CarwashBase):
+            def __init__(self, car_n: int) -> None:
+                self.car_n = car_n
+        """
+        )
+
+        module.load()
+
+        base_init_id = id(module.device.CarwashBase.__init__)
+        init_id = id(module.device.Carwash.__init__)
+
+        module.rewrite(
+                """
+        class CarwashBase:
+            def __init__(self) -> None:
+                self.car_n = 10
+
+        class Carwash(CarwashBase):
+            def __init__(self, car_n: int) -> None:
+                super().__init__()
+                self.car_n = car_n + 10
+        """
+        )
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: module', 'Update: Method: module.Carwash.__init__')
+
+        assert module.device.Carwash(30).car_n == 40
+        assert base_init_id == id(module.device.CarwashBase.__init__)
+        assert init_id == id(module.device.Carwash.__init__)
 
     def test_add_base_class(self, sandbox):
         reloader = Reloader(sandbox)
@@ -356,7 +398,7 @@ class TestClasses(utils.TestBase):
         assert hasattr(module.device.Carwash, "sprinklers_n")
         assert not hasattr(module.device.Carwash, "cars_n")
 
-    def test_modified_method(self, sandbox):
+    def test_modified_classmethod(self, sandbox):
         reloader = Reloader(sandbox)
 
         module = Module("module.py",
@@ -735,3 +777,4 @@ class TestClasses(utils.TestBase):
         reloader.assert_actions('Update: Module: module', 'Delete: Class: module.Carwash.Meta')
 
         assert not hasattr(module.device.Carwash, "Meta")
+
