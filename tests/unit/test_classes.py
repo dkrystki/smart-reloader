@@ -435,11 +435,9 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions(
-                "Update: Module: module",
-                "Update: ClassMethod: module.Carwash.print_sprinklers_cls",
-                "Update: Method: module.Carwash.print_sprinklers",
-        )
+        reloader.assert_actions('Update: Module: module',
+                                 'Update: Method: module.Carwash.print_sprinklers',
+                                 'Update: ClassMethod: module.Carwash.print_sprinklers_cls')
 
         assert module.device.Carwash.print_sprinklers_cls() == "There are 5 sprinklers (Cls)."
         assert reffered_print_sprinklers_cls() == "There are 5 sprinklers (Cls)."
@@ -534,13 +532,11 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions(
-                "Update: Module: module",
-                "Update: ClassVariable: module.Car.engine",
-                "Update: ClassVariable: module.Car.engine_class",
-                "Update: ClassVariable: module.Carwash.car_a",
-                "Update: Method: module.Carwash.__init__",
-        )
+        reloader.assert_actions('Update: Module: module',
+ 'Update: ClassVariable: module.Car.engine',
+ 'Update: ClassVariable: module.Car.engine_class',
+ 'Update: Method: module.Carwash.__init__',
+ 'Update: ClassVariable: module.Carwash.car_a')
 
         assert module.device.Engine is old_engine_class
         assert isinstance(module.device.Carwash().car_b, module.device.Car)
@@ -778,3 +774,54 @@ class TestClasses(utils.TestBase):
 
         assert not hasattr(module.device.Carwash, "Meta")
 
+    def test_class_changed_to_reference(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module("__init__.py",
+                      """
+                      from . import carwash
+                      from . import car
+                      """
+                      )
+
+        carwash = Module("carwash.py",
+                         """
+                         class CarNameType:
+                            a = 1
+                         
+                         class Carwash:
+                             name_type = CarNameType
+                         """
+                         )
+
+        car = Module("car.py",
+                     """
+                     from .carwash import Carwash
+     
+                     class SuperCarwash(Carwash): 
+                         pass
+                     """
+                     )
+
+        init.load()
+
+        carwash.device = init.device.carwash
+        car.device = init.device.car
+
+        car.rewrite(
+            """
+            from .carwash import Carwash
+            
+            class NameType:
+                pass
+            
+            class SuperCarwash(Carwash): 
+                name_type = NameType 
+            """
+        )
+
+        reloader.reload(car)
+
+        reloader.assert_actions('Update: Module: sandbox.car',
+                                 'Add: Class: sandbox.car.NameType',
+                                 'Update: Reference: sandbox.car.SuperCarwash.name_type')

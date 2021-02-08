@@ -157,7 +157,8 @@ class Object:
             )
         ]
 
-        ret.extend(self.get_actions_for_dependent_modules())
+        if not self.is_foreign_obj(self.python_obj):
+            ret.extend(self.get_actions_for_dependent_modules())
         return ret
 
     def is_foreign_obj(self, obj: Any) -> bool:
@@ -179,8 +180,10 @@ class Object:
             return None
 
         obj_from_module = matching_objs[0]
-        ret = module.flat[obj_from_module.full_name].python_obj
-        return ret
+        obj = module.flat.get(obj_from_module.full_name, None)
+        if not obj:
+            return None
+        return obj.python_obj
 
     def get_actions_for_add(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
@@ -191,7 +194,8 @@ class Object:
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["Action"]:
         ret = [self.Delete(reloader=reloader, parent=parent, object=obj)]
-        ret.extend(self.get_actions_for_dependent_modules())
+        if not self.is_foreign_obj(self.python_obj):
+            ret.extend(self.get_actions_for_dependent_modules())
         return ret
 
     @property
@@ -427,7 +431,7 @@ class ContainerObj(Object):
         super().__post_init__()
         self._collect_children()
 
-    def get_dict(self) -> Dict[str, Any]:
+    def get_dict(self) -> "OrderedDict[str, Any]":
         raise NotImplementedError()
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
@@ -461,6 +465,9 @@ class ContainerObj(Object):
 
             obj_classes = self._python_obj_to_obj_classes(n, o)
 
+            if not obj_classes:
+                continue
+
             for n, obj_class in obj_classes.items():
                 if obj_class._is_ignored(n):
                     continue
@@ -472,9 +479,6 @@ class ContainerObj(Object):
     @property
     def source(self) -> str:
         ret = inspect.getsource(self.python_obj)
-        for c in self.children.values():
-            ret = ret.replace(c.source, "")
-
         return ret
 
     def get_actions_for_update(self, new_object: Object) -> List[Action]:
@@ -543,6 +547,9 @@ class Class(ContainerObj):
             else:
                 exec(source, self.parent.module.python_obj.__dict__)
 
+    def __post_init__(self):
+        super().__post_init__()
+
     def get_actions_for_update(self, new_object: "Class") -> List["Action"]:
         if str(self.python_obj.__mro__) == str(new_object.python_obj.__mro__):
             return super().get_actions_for_update(new_object)
@@ -559,18 +566,24 @@ class Class(ContainerObj):
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
         return False
 
-    def get_dict(self) -> Dict[str, Any]:
-        ret = self.python_obj.__dict__
+    def get_dict(self) -> "OrderedDict[str, Any]":
+        members = inspect.getmembers(self.python_obj)
+        ret = OrderedDict(sorted(members))
+
         return ret
 
     def _python_obj_to_obj_classes(
         self, name: str, obj: Any
     ) -> Dict[str, Type[Object]]:
+        # Don't add objects not defined in base class
+        if hasattr(obj, "__qualname__") and obj.__qualname__.split(".")[0] != self.python_obj.__name__:
+            return {}
+
         # If already process means it's just a reference
-        if id(obj) in self.module.python_obj_to_objs and not self.is_primitive(obj):
+        if id(obj) in self.reloader.obj_to_modules and not self.is_primitive(obj):
             return {name: Reference}
 
-        if isinstance(obj, classmethod):
+        if inspect.ismethod(obj):
             return {name: ClassMethod}
 
         if inspect.isfunction(obj):
@@ -674,7 +687,7 @@ class ClassMethod(Function):
 
 @dataclass
 class Dictionary(ContainerObj):
-    def get_dict(self) -> Dict[str, Any]:
+    def get_dict(self) -> "OrderedDict[str, Any]":
         return self.python_obj
 
     def _python_obj_to_obj_classes(
@@ -698,7 +711,8 @@ class Variable(FinalObj):
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["Action"]:
         ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
-        ret.extend(self.get_actions_for_dependent_modules())
+        if not self.is_foreign_obj(self.python_obj):
+            ret.extend(self.get_actions_for_dependent_modules())
         return ret
 
 
@@ -820,7 +834,7 @@ class Module(ContainerObj):
 
         return {name: Variable}
 
-    def get_dict(self) -> Dict[str, Any]:
+    def get_dict(self) -> "OrderedDict[str, Any]":
         return self.python_obj.__dict__
 
     @classmethod

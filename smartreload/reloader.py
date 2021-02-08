@@ -61,8 +61,6 @@ class Reloader(FileSystemEventHandler):
         self.partial_reloader.reload(path)
         # self.trigger_full_reload()
 
-        self.flush()
-
     def flush(self) -> None:
         self.observer.event_queue.queue.clear()
 

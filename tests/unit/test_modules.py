@@ -185,3 +185,40 @@ class TestModules(utils.TestBase):
 
         assert module.device.global_var == 2
         assert slave_module.device.slave_global_var == 3
+
+    def test_not_reloading_other_modules_for_foreign_objs(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module("__init__.py",
+                      """
+                      from . import slave_module
+                      from . import module
+                      """
+                      )
+
+        slave_module = Module("slave_module.py",
+        """
+        from typing import Optional
+        slave_var = 1
+        """
+        )
+
+        module = Module("module.py",
+        """
+        master_var = 2
+        """
+        )
+        init.load()
+
+        slave_module.device = init.device.slave_module
+        module.device = init.device.module
+
+        module.rewrite("""
+        from typing import Optional
+        master_var = 2
+        """
+        )
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: sandbox.module', 'Add: Variable: sandbox.module.Optional')
+

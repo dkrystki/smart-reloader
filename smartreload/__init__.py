@@ -1,7 +1,6 @@
 # flake8: noqa E402, F401
 
 # import warnings
-import pydev
 # sys.stderr = lambda x: None
 
 # warnings.warn = lambda *args, **kwargs: None
