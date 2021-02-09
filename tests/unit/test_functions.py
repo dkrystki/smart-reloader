@@ -276,3 +276,6 @@ class TestFunctions(utils.TestBase):
         )
 
         assert module.device.fun() == 20
+
+    def test_moves_functions_first_lines(self):
+        assert False

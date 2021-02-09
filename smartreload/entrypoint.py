@@ -23,7 +23,7 @@ class SmartReload:
         source = f"""
         import importlib
         import sys
-
+        import smartreload.dependency_watcher
         
         from smartreload.reloader import Reloader
         Reloader("{str(root)}").start()
@@ -81,7 +81,7 @@ class SmartReload:
 
         self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv, is_binary=True)
 
-        self.remove_seed()
+        # self.remove_seed()
         proc = subprocess.Popen(["python", str(self.seed_file.name)])
         proc.communicate()
 

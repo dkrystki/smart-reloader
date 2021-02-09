@@ -137,11 +137,7 @@ class TestModules(utils.TestBase):
 
         reloader.reload(master)
 
-        reloader.assert_actions(
-                'Update: Module: sandbox.master',
-         'Add: Import: sandbox.master.slave',
-         'Update: Module: sandbox'
-                )
+        reloader.assert_actions('Update: Module: sandbox.master', 'Add: Import: sandbox.master.slave')
 
         master.assert_obj_in("slave")
 
@@ -222,3 +218,186 @@ class TestModules(utils.TestBase):
 
         reloader.assert_actions('Update: Module: sandbox.module', 'Add: Variable: sandbox.module.Optional')
 
+    def test_update__all__(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module("__init__.py",
+                      """
+                      from . import slave_module
+                      from . import module
+                      """
+                      )
+
+        slave_module = Module("slave_module.py",
+                              """
+                              __all__ = ["tesla_car_1"]
+                              tesla_car_1 = "Model S"
+                              tesla_car_2 = "Model 3"
+                              tesla_car_3 = "Model 3"
+                              """
+                              )
+
+        module = Module("module.py",
+                        """
+                        from .slave_module import *
+                        """
+                        )
+        init.load()
+
+        slave_module.device = init.device.slave_module
+        module.device = init.device.module
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_not_in("tesla_car_2")
+        module.assert_obj_not_in("tesla_car_3")
+
+        slave_module.replace('__all__ = ["tesla_car_1"]', '__all__ = ["tesla_car_1", "tesla_car_2", "tesla_car_3"]')
+
+        reloader.reload(slave_module)
+
+        reloader.assert_actions('Update: Module: sandbox.slave_module',
+                                 'Update: All: sandbox.slave_module.__all__',
+                                 'Update: Module: sandbox.module',
+                                 'Add: Variable: sandbox.module.tesla_car_2',
+                                'Add: Variable: sandbox.module.tesla_car_3', ignore_order=True)
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_in("tesla_car_2")
+        module.assert_obj_in("tesla_car_3")
+
+    def test_add__all__(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module("__init__.py",
+                      """
+                      from . import slave_module
+                      from . import module
+                      """
+                      )
+
+        slave_module = Module("slave_module.py",
+                              """
+                              tesla_car_1 = "Model S"
+                              tesla_car_2 = "Model 3"
+                              tesla_car_3 = "Model 3"
+                              """
+                              )
+
+        module = Module("module.py",
+                        """
+                        from .slave_module import *
+                        """
+                        )
+        init.load()
+
+        slave_module.device = init.device.slave_module
+        module.device = init.device.module
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_in("tesla_car_2")
+        module.assert_obj_in("tesla_car_3")
+
+        slave_module.append('__all__ = ["tesla_car_1"]')
+
+        reloader.reload(slave_module)
+
+        reloader.assert_actions('Update: Module: sandbox.slave_module',
+                                     'Add: All: sandbox.slave_module.__all__',
+                                     'Update: Module: sandbox.module',
+                                     'Delete: Variable: sandbox.module.tesla_car_2',
+                                     'Delete: Variable: sandbox.module.tesla_car_3', ignore_order=True)
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_not_in("tesla_car_2")
+        module.assert_obj_not_in("tesla_car_3")
+
+    def test_delete__all__(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module("__init__.py",
+                      """
+                      from . import slave_module
+                      from . import module
+                      """
+                      )
+
+        slave_module = Module("slave_module.py",
+                              """
+                              __all__ = ["tesla_car_1"]
+                              tesla_car_1 = "Model S"
+                              tesla_car_2 = "Model 3"
+                              tesla_car_3 = "Model 3"
+                              """
+                              )
+
+        module = Module("module.py",
+                        """
+                        from .slave_module import *
+                        """
+                        )
+        init.load()
+
+        slave_module.device = init.device.slave_module
+        module.device = init.device.module
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_not_in("tesla_car_2")
+        module.assert_obj_not_in("tesla_car_3")
+
+        slave_module.replace('__all__ = ["tesla_car_1"]', "")
+
+        reloader.reload(slave_module)
+
+        reloader.assert_actions('Update: Module: sandbox.slave_module',
+                                 'Delete: All: sandbox.slave_module.__all__',
+                                 'Update: Module: sandbox.module',
+                                 'Add: Variable: sandbox.module.tesla_car_2',
+                                 'Add: Variable: sandbox.module.tesla_car_3', ignore_order=True)
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_in("tesla_car_2")
+        module.assert_obj_in("tesla_car_3")
+
+    def test_delete_star_import(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module("__init__.py",
+                      """
+                      from . import slave_module
+                      from . import module
+                      """
+                      )
+
+        slave_module = Module("slave_module.py",
+                              """
+                              __all__ = ["tesla_car_1"]
+                              tesla_car_1 = "Model S"
+                              tesla_car_2 = "Model 3"
+                              tesla_car_3 = "Model 3"
+                              """
+                              )
+
+        module = Module("module.py",
+                        """
+                        from .slave_module import *
+                        """
+                        )
+        init.load()
+
+        slave_module.device = init.device.slave_module
+        module.device = init.device.module
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_not_in("tesla_car_2")
+        module.assert_obj_not_in("tesla_car_3")
+
+        module.rewrite("")
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: sandbox.module',
+                                'Delete: Variable: sandbox.module.tesla_car_1')
+
+        module.assert_obj_not_in("tesla_car_1")
+        module.assert_obj_not_in("tesla_car_2")
+        module.assert_obj_not_in("tesla_car_3")

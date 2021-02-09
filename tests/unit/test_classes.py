@@ -1,5 +1,3 @@
-from numpy.testing import raises
-
 from tests import utils
 from tests.utils import Module, Reloader
 
@@ -436,8 +434,8 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions('Update: Module: module',
-                                 'Update: Method: module.Carwash.print_sprinklers',
-                                 'Update: ClassMethod: module.Carwash.print_sprinklers_cls')
+                                 'Update: ClassMethod: module.Carwash.print_sprinklers_cls',
+                                 'Update: Method: module.Carwash.print_sprinklers')
 
         assert module.device.Carwash.print_sprinklers_cls() == "There are 5 sprinklers (Cls)."
         assert reffered_print_sprinklers_cls() == "There are 5 sprinklers (Cls)."
@@ -535,8 +533,8 @@ class TestClasses(utils.TestBase):
         reloader.assert_actions('Update: Module: module',
  'Update: ClassVariable: module.Car.engine',
  'Update: ClassVariable: module.Car.engine_class',
- 'Update: Method: module.Carwash.__init__',
- 'Update: ClassVariable: module.Carwash.car_a')
+ 'Update: ClassVariable: module.Carwash.car_a',
+ 'Update: Method: module.Carwash.__init__')
 
         assert module.device.Engine is old_engine_class
         assert isinstance(module.device.Carwash().car_b, module.device.Car)
@@ -824,4 +822,4 @@ class TestClasses(utils.TestBase):
 
         reloader.assert_actions('Update: Module: sandbox.car',
                                  'Add: Class: sandbox.car.NameType',
-                                 'Update: Reference: sandbox.car.SuperCarwash.name_type')
+                                 'Add: Reference: sandbox.car.SuperCarwash.name_type')

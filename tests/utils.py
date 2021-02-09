@@ -12,6 +12,8 @@ import smartreload
 
 logger = getLogger(__name__)
 
+from smartreload import dependency_watcher
+
 
 def load_module(name: str) -> Any:
     module = builtins.__import__(name)
@@ -71,6 +73,7 @@ class Module:
         else:
             name = self.path.parent.absolute().stem
 
+        dependency_watcher.enable()
         self.device = load_module(name)
 
     def assert_obj_in(self, obj_name: str) -> None:
@@ -94,6 +97,9 @@ class Reloader:
     def rollback(self) -> None:
         self.device.rollback()
 
-    def assert_actions(self, *actions: str) -> None:
+    def assert_actions(self, *actions: str, ignore_order: bool = False) -> None:
         actions_str = tuple(repr(a) for a in self.device.applied_actions)
-        assert actions_str == actions
+        if not ignore_order:
+            assert actions_str == actions
+        else:
+            assert sorted(actions_str) == sorted(actions)

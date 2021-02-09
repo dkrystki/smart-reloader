@@ -13,7 +13,7 @@ from textwrap import dedent, indent
 from types import ModuleType, CodeType
 from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, ClassVar
 
-from . import misc, console
+from . import misc, console, dependency_watcher
 
 dataclass = dataclass(repr=False)
 
@@ -144,7 +144,7 @@ class Object:
         ret = self.full_name.split(".")[-1]
         return ret
 
-    def get_actions_for_update(self, new_object: "Variable") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Object") -> List["Action"]:
         if self.safe_compare(new_object):
             return []
 
@@ -216,6 +216,9 @@ class Object:
     @classmethod
     def _is_ignored(cls, name: str) -> bool:
         name = str(name)
+        if name == "__all__":
+            return False
+
         if name.startswith("__") and name.endswith("__"):
             return True
 
@@ -444,6 +447,9 @@ class ContainerObj(Object):
             return {name: Reference}
 
         if inspect.isclass(obj) and not self.is_foreign_obj(obj):
+            # if the name is different that the class name it means it's just a reference not actualy class definition
+            if name != obj.__name__:
+                return {name: Reference}
             return {name: Class}
 
         if inspect.isfunction(obj):
@@ -567,8 +573,9 @@ class Class(ContainerObj):
         return False
 
     def get_dict(self) -> "OrderedDict[str, Any]":
-        members = inspect.getmembers(self.python_obj)
-        ret = OrderedDict(sorted(members))
+        # members = inspect.getmembers(self.python_obj)
+        # ret = OrderedDict(sorted(members))
+        ret = OrderedDict(self.python_obj.__dict__)
 
         return ret
 
@@ -576,14 +583,14 @@ class Class(ContainerObj):
         self, name: str, obj: Any
     ) -> Dict[str, Type[Object]]:
         # Don't add objects not defined in base class
-        if hasattr(obj, "__qualname__") and obj.__qualname__.split(".")[0] != self.python_obj.__name__:
-            return {}
+        # if hasattr(obj, "__qualname__") and obj.__qualname__.split(".")[0] != self.python_obj.__name__:
+        #     return {}
 
         # If already process means it's just a reference
         if id(obj) in self.reloader.obj_to_modules and not self.is_primitive(obj):
             return {name: Reference}
 
-        if inspect.ismethod(obj):
+        if isinstance(obj, classmethod):
             return {name: ClassMethod}
 
         if inspect.isfunction(obj):
@@ -717,6 +724,44 @@ class Variable(FinalObj):
 
 
 @dataclass
+class All(FinalObj):
+    def get_module_updates_actions(self) -> List[Action]:
+        ret = []
+        star_import_modules = dependency_watcher.module_file_to_start_import_usages[str(self.module.file)]
+
+        for module_path in star_import_modules:
+            modules = self.reloader.modules.user_modules[module_path]
+
+            for m in modules:
+                module = Module(m, reloader=self.reloader)
+                ret.append(Module.Update(reloader=self.reloader, object=module))
+
+        return ret
+
+    def get_actions_for_add(
+        self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
+    ) -> List["Action"]:
+        ret = super().get_actions_for_add(reloader, parent, obj)
+
+        ret.extend(self.get_module_updates_actions())
+        return ret
+
+    def get_actions_for_update(self, new_object: "All") -> List["Action"]:
+        ret = super().get_actions_for_update(new_object)
+
+        ret.extend(self.get_module_updates_actions())
+        return ret
+
+    def get_actions_for_delete(
+        self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
+    ) -> List["Action"]:
+        ret = super().get_actions_for_delete(reloader, parent, obj)
+
+        ret.extend(self.get_module_updates_actions())
+        return ret
+
+
+@dataclass
 class ClassVariable(Variable):
     def get_actions_for_update(self, new_object: "Variable") -> List["Action"]:
         if self.safe_compare(new_object):
@@ -825,6 +870,9 @@ class Module(ContainerObj):
     def _python_obj_to_obj_classes(
         self, name: str, obj: Any
     ) -> Dict[str, Type[Object]]:
+        if name == "__all__":
+            return {name: All}
+
         ret = super()._python_obj_to_obj_classes(name, obj)
         if ret:
             return ret
@@ -866,6 +914,9 @@ class Module(ContainerObj):
             ret.update(o.get_flat_repr())
 
         return ret
+
+    def get_star_import_module_files(self) -> List[Path]:
+        pass
 
 
 @dataclass
@@ -924,6 +975,7 @@ class Modules(dict):
 class PartialReloader:
     logger: Logger
     named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleType]]
+    obj_to_modules: DefaultDict[int, Set[ModuleType]]
 
     def __init__(self, root: Path, logger: Any) -> None:
         logger.debug(f"Creating partial reloader for {root}")
@@ -986,6 +1038,14 @@ class PartialReloader:
                 continue
             for m in list(modules):
                 self._collect_dependencies(m)
+
+        # remove owner modules (original definition place)
+        for (n, o_id), modules in self.named_obj_to_modules.copy().items():
+            sorted_modules = sorted(list(modules), key=lambda m: list(self.modules.user_modules.keys()).index(m.__file__))
+            if sorted_modules:
+                sorted_modules.pop(0)
+
+            self.named_obj_to_modules[(n, o_id)] = set(sorted_modules)
 
     def _reload(self, module_file: Path) -> None:
         for a in self.get_actions(module_file):
