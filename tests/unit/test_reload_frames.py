@@ -9,8 +9,9 @@ class TestReloadFrames(utils.TestBase):
     def test_wip(self, sandbox):
         reloader = Reloader(sandbox)
 
-        module = Module("module.py",
-        """
+        module = Module(
+            "module.py",
+            """
         from time import sleep
         glob_var = 1
         
@@ -20,7 +21,7 @@ class TestReloadFrames(utils.TestBase):
                 elements.append(glob_var)
                 sleep(1)
             return elements
-        """
+        """,
         )
         module.load()
 
@@ -33,8 +34,6 @@ class TestReloadFrames(utils.TestBase):
         Thread(target=reload).start()
         ret = module.device.start()
 
-        reloader.assert_actions(
-            'Update: Module: module', 'Update: Variable: module.glob_var'
-        )
+        reloader.assert_actions("Update: Variable: module.glob_var")
 
         assert ret == [1, 1, 5, 5]

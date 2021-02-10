@@ -213,21 +213,22 @@ class TestFunctions(utils.TestBase):
     def test_uses_function_2(self, sandbox):
         reloader = Reloader(sandbox)
 
-        module = Module("module.py",
-        """
+        module = Module(
+            "module.py",
+            """
         def other_fun():
             return 5
 
         def fun():
             return other_fun() + 10
-        """
+        """,
         )
 
         module.load()
         assert module.device.fun() == 15
 
         module.rewrite(
-        """
+            """
         def other_fun():
             return 10
 
@@ -248,18 +249,19 @@ class TestFunctions(utils.TestBase):
     def test_uses_added_function(self, sandbox):
         reloader = Reloader(sandbox)
 
-        module = Module("module.py",
-        """
+        module = Module(
+            "module.py",
+            """
         def fun():
             return 10
-        """
+        """,
         )
 
         module.load()
         assert module.device.fun() == 10
 
         module.rewrite(
-        """
+            """
         def other_fun():
             return 10
 

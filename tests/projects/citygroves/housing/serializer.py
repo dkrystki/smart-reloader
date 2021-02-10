@@ -1,6 +1,5 @@
-from rest_framework import serializers
-
 from housing.models import Room, Unit
+from rest_framework import serializers
 
 
 class UnitSerializer(serializers.ModelSerializer):

@@ -17,5 +17,5 @@ console = Console()
 console._force_terminal = True
 console.soft_wrap = True
 
+from .config import BaseConfig
 from .partialreloader import *
-

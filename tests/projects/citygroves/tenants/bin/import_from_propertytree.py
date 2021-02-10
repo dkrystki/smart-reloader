@@ -21,7 +21,6 @@ from housing.models import Room
 from tenants.models import Person, Tenant
 
 
-
 class Importer:
     def __init__(self, input_path: Path):
         self.input_path = input_path
@@ -61,8 +60,12 @@ class Importer:
                 else:
                     people.append(self._create_person(row["Tenancy"], row["Email"]))
 
-                unit_n: int = int(list(filter(None, re.split("[U,R,/]", row["Property"])))[0])
-                room_n: int = int(list(filter(None, re.split("[U,R,/]", row["Property"])))[1])
+                unit_n: int = int(
+                    list(filter(None, re.split("[U,R,/]", row["Property"])))[0]
+                )
+                room_n: int = int(
+                    list(filter(None, re.split("[U,R,/]", row["Property"])))[1]
+                )
 
                 room = Room.objects.get(number=room_n, unit__number=unit_n)
 

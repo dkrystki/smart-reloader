@@ -1,9 +1,8 @@
 from typing import Any, Dict
 
-from rest_framework import serializers
-
 from housing.models import Room
 from housing.serializer import RoomSerializer
+from rest_framework import serializers
 from tenants.models import Address, Application, EntryNotice, Person, Referrer, Tenant
 
 
@@ -20,7 +19,9 @@ class AddressSerializer(serializers.ModelSerializer):
 
 
 class EntryNoticeSerializer(serializers.ModelSerializer):
-    tenant = serializers.PrimaryKeyRelatedField(write_only=True, queryset=Tenant.objects.all())
+    tenant = serializers.PrimaryKeyRelatedField(
+        write_only=True, queryset=Tenant.objects.all()
+    )
     str_repr = serializers.ReadOnlyField(source="__str__")
 
     class Meta:
@@ -45,7 +46,9 @@ class TenantSerializer(serializers.ModelSerializer):
         unit_number = validated_data.pop("unit_number")
         room = Room.objects.get(unit__number=unit_number, number=room_number)
 
-        referrer = Tenant.objects.create(person=person, applicant=room, **validated_data)
+        referrer = Tenant.objects.create(
+            person=person, applicant=room, **validated_data
+        )
         return referrer
 
     def update(self, instance: Referrer, validated_data):
@@ -59,7 +62,9 @@ class TenantSerializer(serializers.ModelSerializer):
             unit_number = validated_data.pop("unit_number")
 
         if "people" in validated_data:
-            serializer = PersonSerializer(data=validated_data.pop("people"), partial=True, many=True)
+            serializer = PersonSerializer(
+                data=validated_data.pop("people"), partial=True, many=True
+            )
             serializer.is_valid(raise_exception=True)
 
             pd: Dict[str, Any]
@@ -80,7 +85,9 @@ class TenantSerializer(serializers.ModelSerializer):
 
 class ReferrerSerializer(serializers.ModelSerializer):
     address = AddressSerializer()
-    applicant = serializers.PrimaryKeyRelatedField(required=False, queryset=Person.objects.all())
+    applicant = serializers.PrimaryKeyRelatedField(
+        required=False, queryset=Person.objects.all()
+    )
 
     class Meta:
         model = Referrer
@@ -89,7 +96,9 @@ class ReferrerSerializer(serializers.ModelSerializer):
     def create(self, validated_data) -> Referrer:
         address = Address.objects.create(**validated_data.pop("address"))
         applicant = validated_data.pop("applicant")
-        referrer = Referrer.objects.create(address=address, applicant=applicant, **validated_data)
+        referrer = Referrer.objects.create(
+            address=address, applicant=applicant, **validated_data
+        )
         return referrer
 
     def update(self, instance: Referrer, validated_data):
@@ -183,7 +192,9 @@ class ApplicationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         person = Person.objects.create(**validated_data.pop("person"))
 
-        current_address = Address.objects.create(**validated_data.pop("current_address"))
+        current_address = Address.objects.create(
+            **validated_data.pop("current_address")
+        )
         referrers_data = validated_data.pop("referrers")
 
         room_number = validated_data.pop("room_number")

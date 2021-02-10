@@ -16,8 +16,6 @@ from watchdog.observers import Observer
 
 __all__ = [
     "dir_name_to_class_name",
-    "render_py_file",
-    "render_file",
     "import_from_file",
     "EnvoError",
     "Callback",
@@ -214,8 +212,11 @@ def path_to_module_name(path: Path, package_root: Path) -> str:
     return ret
 
 
-def import_from_file(path: Path, package_root: Path) -> Any:
-    module_name = path_to_module_name(path, package_root)
+def import_from_file(
+    path: Path, package_root: Path, module_name: Optional[str] = None
+) -> Any:
+    if not module_name:
+        module_name = path_to_module_name(path, package_root)
     loader = importlib.machinery.SourceFileLoader(module_name, str(path))
     spec = importlib.util.spec_from_loader(module_name, loader)
     module = importlib.util.module_from_spec(spec)
@@ -234,36 +235,6 @@ def get_module_from_full_name(full_name: str) -> Optional[str]:
         parts.pop(0)
         if not parts:
             return None
-
-
-def import_from_file_raw(path: Path) -> Any:
-    loader = importlib.machinery.SourceFileLoader(str(path), str(path))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
-
-
-def get_envo_relevant_traceback(exc: BaseException) -> List[str]:
-    if isinstance(exc, EnvoError):
-        msg = str(exc).splitlines(keepends=True)
-        return msg
-
-    msg = []
-    msg.extend(traceback.format_stack())
-    msg.extend(traceback.format_exception(*sys.exc_info())[1:])
-    msg_relevant = ["Traceback (Envo relevant):\n"]
-    relevant = False
-    for m in msg:
-        if re.search(r"env_.*\.py", m):
-            relevant = True
-        if relevant:
-            msg_relevant.append(m)
-
-    if relevant:
-        msg = msg_relevant
-
-    return msg
 
 
 @dataclass

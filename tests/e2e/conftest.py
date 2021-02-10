@@ -1,7 +1,8 @@
 from pytest import fixture
 
-from . import utils
 from tests.e2e.utils import SmartReload
+
+from . import utils
 
 
 @fixture

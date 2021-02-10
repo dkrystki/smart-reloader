@@ -147,7 +147,9 @@ class EntryNotice(models.Model):
 
         if self.tenant.people.all().count() == 2:
             person2: Person = self.tenant.people.all()[1]
-            input_dict["person1.full_name"]: f"{person2.first_name} {person2.middle_names + ' '}{person2.last_name}"
+            input_dict[
+                "person1.full_name"
+            ]: f"{person2.first_name} {person2.middle_names + ' '}{person2.last_name}"
 
         with EntryNoticePdf(output_path=path) as pdf:
             pdf.fill(input_dict)
@@ -162,8 +164,14 @@ class EntryNotice(models.Model):
         message["from"] = "plasmakwazar.test@gmail.com"
         title = f"Entry notice {'(' + self.details + ')' if self.details else ''}"
         message["subject"] = title
-        context = {"tenant_name": str(self.tenant), "entry_notice": self, "title": title}
-        message.attach(MIMEText(render_to_string("entry-notice-email.html", context), "html"))
+        context = {
+            "tenant_name": str(self.tenant),
+            "entry_notice": self,
+            "title": title,
+        }
+        message.attach(
+            MIMEText(render_to_string("entry-notice-email.html", context), "html")
+        )
 
         pdf_path = Path(f"/tmp/{str(self)}.pdf".replace(" ", ""))
         self.create_pdf(pdf_path)

@@ -8,41 +8,41 @@ class TestMisc(utils.TestBase):
     def test_syntax_error(self, sandbox, capsys):
         reloader = Reloader(sandbox)
 
-        module = Module("module.py",
-        """
+        module = Module(
+            "module.py",
+            """
         glob_var = 4
-        """
+        """,
         )
 
         module.load()
 
         module.rewrite(
-        """
+            """
         glob_var = 4pfds
         """
         )
 
-        reloader.reload(module)
-
-        assert "SyntaxError: invalid syntax" in capsys.readouterr().out
+        with pytest.raises(SyntaxError):
+            reloader.reload(module)
 
     def test_other_error(self, sandbox, capsys):
         reloader = Reloader(sandbox)
 
-        module = Module("module.py",
-        """
+        module = Module(
+            "module.py",
+            """
         glob_var = 4
-        """
+        """,
         )
 
         module.load()
 
         module.rewrite(
-        """
+            """
         glob_var = 4/0
         """
         )
 
-        reloader.reload(module)
-
-        assert "ZeroDivisionError" in capsys.readouterr().out
+        with pytest.raises(ZeroDivisionError):
+            reloader.reload(module)

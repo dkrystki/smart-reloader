@@ -1,12 +1,11 @@
-import sys
 import logging
+import sys
 from pathlib import Path
 
+from django.conf import settings
 from django.db.models import Prefetch
 from django.http import HttpResponse
-from django.conf import settings
 from rest_framework import generics, mixins, viewsets
-
 from tenants import models, serializers
 
 logger = logging.getLogger(__name__)
@@ -17,8 +16,10 @@ c = 123
 d = 33333
 e = 3333388
 
+
 def hihi(haha):
     print(haha)
+
 
 class ApplicationViewSet(
     viewsets.GenericViewSet,
@@ -42,7 +43,9 @@ class GetApplicationLease(generics.RetrieveAPIView):
 
         file_path = Path("/tmp/lease.pdf")
         application.save_lease_pdf(file_path)
-        response = HttpResponse(open(str(file_path), "rb"), content_type="application/pdf")
+        response = HttpResponse(
+            open(str(file_path), "rb"), content_type="application/pdf"
+        )
 
         pdf_name = f"{str(application)}_Lease.pdf"
         response["Content-Disposition"] = f"attachment; filename={pdf_name}"
@@ -51,13 +54,21 @@ class GetApplicationLease(generics.RetrieveAPIView):
         return response
 
 
-class PeopleViewset(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin):
+class PeopleViewset(
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+):
     queryset = models.Person.objects.all()
     serializer_class = serializers.PersonSerializer
 
 
 class TenantsViewset(
-    viewsets.GenericViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
 ):
     queryset = models.Tenant.objects.all()
     serializer_class = serializers.TenantSerializer
@@ -69,7 +80,10 @@ class TenantsViewset(
 
 
 class EntryNoticeViewset(
-    viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.ListModelMixin, mixins.RetrieveModelMixin
+    viewsets.GenericViewSet,
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
 ):
     queryset = models.EntryNotice.objects.all()
     serializer_class = serializers.EntryNoticeSerializer
@@ -81,7 +95,9 @@ class EntryNoticeViewset(
             path = Path(f"/tmp/{str(obj)}.pdf")
             obj.create_pdf(path)
 
-            response = HttpResponse(open(str(path), "rb"), content_type="application/pdf")
+            response = HttpResponse(
+                open(str(path), "rb"), content_type="application/pdf"
+            )
 
             response["Content-Disposition"] = f"attachment; filename={path.stem}"
 
@@ -103,16 +119,20 @@ class EntryNoticeSend(generics.GenericAPIView):
 
 
 class ReferrersViewset(
-    viewsets.GenericViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
 ):
     queryset = models.Referrer.objects.all()
     serializer_class = serializers.ReferrerSerializer
 
 
 class AddressesViewset(
-    viewsets.GenericViewSet, mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
 ):
     queryset = models.Address.objects.all()
     serializer_class = serializers.AddressSerializer
-
-

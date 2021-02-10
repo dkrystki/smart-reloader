@@ -71,7 +71,7 @@ MIDDLEWARE = [
 ]
 
 ALLOW_ADMIN = True
-ALLOWED_ADMIN_IPS = ['192.168.0.7']
+ALLOWED_ADMIN_IPS = ["192.168.0.7"]
 
 ROOT_URLCONF = "backend.urls"
 CORS_ORIGIN_ALLOW_ALL = True
@@ -98,10 +98,10 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'citygroves',
-        'USER': "user",
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": "citygroves",
+        "USER": "user",
         "ATOMIC_REQUESTS": True,
         "TIME_ZONE": "UTC",
         "AUTOCOMMIT": True,
@@ -110,8 +110,8 @@ DATABASES = {
         "OPTIONS": {},
         "PASSWORD": "",
         "CONN_MAX_AGE": 0,
-        'TEST': {
-            'NAME': 'mytestdatabase',
+        "TEST": {
+            "NAME": "mytestdatabase",
             "MIGRATE": True,
             "COLLATION": None,
             "CHARSET": None,
@@ -124,7 +124,9 @@ DATABASES = {
 # https://docs.djangoproject.com/en/2.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -153,21 +155,23 @@ STAGE = "local"
 
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
     },
 }
 
 
-REST_FRAMEWORK = {"DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"]}
+REST_FRAMEWORK = {
+    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"]
+}
 
 SOME_VAR = 12
 SOME_VAR_2 = 12

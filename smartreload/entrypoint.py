@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -5,15 +6,15 @@ from textwrap import dedent
 from threading import Thread
 from time import sleep
 from typing import List, Optional
-import os
 
 
 class SmartReload:
-
     def __init__(self):
         self.seed_file = Path("__smartreload__.py")
 
-    def create_seed(self, root: Path, entry_point_file: Path, argv: List[str], is_binary: bool) -> None:
+    def create_seed(
+        self, root: Path, entry_point_file: Path, argv: List[str], is_binary: bool
+    ) -> None:
 
         if is_binary:
             set_module = f"""sys.modules["__smartreloader_entrypoint__"] = module"""
@@ -23,10 +24,22 @@ class SmartReload:
         source = f"""
         import importlib
         import sys
-        import smartreload.dependency_watcher
+        from pathlib import Path
+        
+        from smartreload import dependency_watcher
+        from smartreload.misc import import_from_file
+        dependency_watcher.enable()
+        
+        config_file = Path("smartreload_config.py")
+        
+        if config_file.exists():
+            config = import_from_file(config_file, package_root=Path(".")).Config()
+        else:
+            from smartreload.config import BaseConfig
+            config = BaseConfig()
         
         from smartreload.reloader import Reloader
-        Reloader("{str(root)}").start()
+        Reloader("{str(root)}", config).start()
         
         sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
         
@@ -79,9 +92,14 @@ class SmartReload:
         if not entry_point_file:
             entry_point_file = Path(argv[0])
 
-        self.create_seed(root=Path(os.getcwd()), entry_point_file=entry_point_file, argv=argv, is_binary=True)
+        self.create_seed(
+            root=Path(os.getcwd()),
+            entry_point_file=entry_point_file,
+            argv=argv,
+            is_binary=True,
+        )
 
-        # self.remove_seed()
+        self.remove_seed()
         proc = subprocess.Popen(["python", str(self.seed_file.name)])
         proc.communicate()
 

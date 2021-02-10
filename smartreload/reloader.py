@@ -1,27 +1,34 @@
-import sys
 import errno
-import os
-from logging import getLogger
 import logging
+import os
+import sys
+from logging import getLogger
 from pathlib import Path
-from typing import List, Callable
+from typing import TYPE_CHECKING, Callable, List
 
+import watchdog.observers.inotify_buffer
 from globmatch import glob_match
-from watchdog.events import FileSystemEventHandler, FileSystemEvent, EVENT_TYPE_MODIFIED
+from watchdog.events import EVENT_TYPE_MODIFIED, FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from smartreload import PartialReloader, console
 from smartreload.misc import is_linux
-import watchdog.observers.inotify_buffer
+from smartreload.partialreloader import FullReloadNeeded
 
 logger = getLogger("Reloader")
 logger.setLevel(logging.INFO)
 
 
+if TYPE_CHECKING:
+    from smartreload.config import Config
+
+
 class Reloader(FileSystemEventHandler):
-    def __init__(self, root: str):
+    def __init__(self, root: str, config: "Config"):
         self.root = Path(root)
         self.partial_reloader = PartialReloader(root=self.root, logger=logger)
+
+        self.config = config
 
         super().__init__()
 
@@ -30,23 +37,13 @@ class Reloader(FileSystemEventHandler):
         self.observer.schedule(self, str(self.root), recursive=True)
         watchdog.observers.inotify_buffer.logger.setLevel("INFO")
 
-    @property
-    def watch_files(self) -> List[str]:
-        return ["**/*.py"]
-
-    @property
-    def ignore_files(self) -> List[str]:
-        return [r"**/.*", r"**/*~", r"**/__pycache__"]
-
-    @property
-    def fully_reloadable_files(self) -> List[str]:
-        return []
-
     def trigger_full_reload(self) -> None:
         sys.exit(0)
 
     def matches(self, path: Path) -> bool:
-        return not glob_match(str(path), self.ignore_files) and glob_match(str(path), self.watch_files)
+        return not glob_match(str(path), self.config.ignored_paths) and glob_match(
+            str(path), self.config.watched_paths
+        )
 
     def on_any_event(self, event: FileSystemEvent):
         path = Path(event.src_path)
@@ -54,12 +51,29 @@ class Reloader(FileSystemEventHandler):
         if not self.matches(path):
             return
 
-        if glob_match(str(path), self.fully_reloadable_files):
+        try:
+            self.config.before_reload(path)
+            self.partial_reloader.reload(path)
+            self.config.after_reload(path, self.partial_reloader.applied_actions)
+        except FullReloadNeeded:
+            self.config.before_full_reload(path, None)
             self.trigger_full_reload()
+        except Exception:
+            from rich.traceback import Traceback
 
+            self.config.after_rollback(path, self.partial_reloader.applied_actions)
 
-        self.partial_reloader.reload(path)
-        # self.trigger_full_reload()
+            exc_type, exc_value, traceback = sys.exc_info()
+            trace = Traceback.extract(exc_type, exc_value, traceback)
+            trace.stacks[0].frames = trace.stacks[0].frames[-1:]
+            trace.stacks = [trace.stacks[0]]
+            traceback_obj = Traceback(trace=trace, width=800, show_locals=True)
+            console.print(traceback_obj)
+
+            self.partial_reloader.rollback()
+            self.config.after_rollback(path, self.partial_reloader.applied_actions)
+
+        self.flush()
 
     def flush(self) -> None:
         self.observer.event_queue.queue.clear()
@@ -67,7 +81,7 @@ class Reloader(FileSystemEventHandler):
     def walk_dirs(self, on_match: Callable) -> None:
         def walk(path: Path):
             for p in path.iterdir():
-                if glob_match(path, self.ignore_files):
+                if glob_match(path, self.config.ignored_paths):
                     continue
                 on_match(str(p).encode("utf-8"))
                 if p.is_dir():
@@ -77,6 +91,8 @@ class Reloader(FileSystemEventHandler):
 
     def start(self) -> None:
         # self.logger.debug("Starting observer")
+
+        self.config.on_start()
 
         if is_linux():
 

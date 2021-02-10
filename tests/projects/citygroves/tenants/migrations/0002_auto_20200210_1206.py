@@ -11,11 +11,15 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="person",
             name="email",
-            field=models.EmailField(blank=True, default=None, max_length=127, null=True),
+            field=models.EmailField(
+                blank=True, default=None, max_length=127, null=True
+            ),
         ),
         migrations.AlterField(
             model_name="referrer",
             name="email",
-            field=models.EmailField(blank=True, default=None, max_length=127, null=True),
+            field=models.EmailField(
+                blank=True, default=None, max_length=127, null=True
+            ),
         ),
     ]

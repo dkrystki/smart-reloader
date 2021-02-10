@@ -4,11 +4,10 @@ import subprocess
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import List, Callable, Optional, Type
+from typing import Callable, List, Optional, Type
 
 import pyte
 from rhei import Stopwatch
-
 
 TIMEOUT = 2
 
@@ -108,7 +107,7 @@ class SmartReload:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
-            env=environ
+            env=environ,
         )
 
         self.output_collector.start()
@@ -177,4 +176,3 @@ class SmartReload:
         expected_multiline = self.expecter.expected_regex.replace(r"\n", "\n")
         print(f"\nExpected (multiline):\n{expected_multiline}")
         print(f"\nExpected (raw):\n{self.expecter.expected_regex}")
-

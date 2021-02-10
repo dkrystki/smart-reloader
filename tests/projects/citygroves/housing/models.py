@@ -14,4 +14,3 @@ class Room(models.Model):
 
     def __str__(self):
         return f"U{self.unit.number}R{self.number}"
-
