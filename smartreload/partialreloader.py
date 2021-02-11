@@ -5,6 +5,9 @@ import re
 import sys
 from collections import OrderedDict, defaultdict
 from copy import copy
+from threading import Thread
+from time import sleep
+
 from dataclasses import dataclass, field
 from logging import Logger
 from pathlib import Path
@@ -22,6 +25,8 @@ from typing import (
     Tuple,
     Type,
 )
+
+from deepdiff import DeepDiff
 
 from . import console, dependency_watcher, misc
 
@@ -100,6 +105,7 @@ class Object:
         parent: Optional["ContainerObj"]
         object: "Object"
         new_object: Optional["Object"]
+        difference: dict = field(init=False)
 
         def __repr__(self) -> str:
             return f"Update: {repr(self.object)}"
@@ -200,7 +206,15 @@ class Object:
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["Action"]:
         ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
-        ret.extend(self.get_star_import_updates_actions())
+        if self.is_in_all():
+            ret.extend(self.get_star_import_updates_actions())
+        return ret
+
+    def is_in_all(self) -> bool:
+        if self.bare_name == "__all__":
+            return True
+
+        ret = not hasattr(self.module.python_obj, "__all__") or self.bare_name in self.module.python_obj.__all__
         return ret
 
     def get_actions_for_delete(
@@ -208,7 +222,8 @@ class Object:
     ) -> List["Action"]:
         ret = [self.Delete(reloader=reloader, parent=parent, object=obj)]
         ret.extend(self.get_actions_for_dependent_modules())
-        ret.extend(self.get_star_import_updates_actions())
+        if self.is_in_all():
+            ret.extend(self.get_star_import_updates_actions())
         return ret
 
     @property
@@ -594,14 +609,7 @@ class Class(ContainerObj):
         if str(self.python_obj.__mro__) == str(new_object.python_obj.__mro__):
             return super().get_actions_for_update(new_object)
         else:
-            return self.get_full_reload_actions()
-
-    def get_full_reload_actions(self) -> List[Action]:
-        return [
-            *self.get_actions_for_delete(self.reloader, self.parent, self),
-            *self.get_actions_for_add(self.reloader, self.parent, self),
-            *self.get_actions_for_dependent_modules(),
-        ]
+            raise FullReloadNeeded()
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
         return False
@@ -757,7 +765,14 @@ class Variable(FinalObj):
 @dataclass
 class All(FinalObj):
     def get_actions_for_update(self, new_object: "All") -> List["Action"]:
-        ret = super().get_actions_for_update(new_object)
+        if new_object.python_obj == self.python_obj:
+            return []
+        ret = [self.Update(
+            reloader=self.reloader,
+            parent=self.parent,
+            object=self,
+            new_object=new_object,
+        )]
         ret.extend(self.get_star_import_updates_actions())
         return ret
 
@@ -851,7 +866,6 @@ class Module(ContainerObj):
         priority = 50
 
         def execute(self) -> None:
-            self.log()
             if self.reloader.is_already_reloaded(self.object.python_obj):
                 return
 
@@ -973,22 +987,91 @@ class Modules(dict):
         return self._dict.__delitem__(*args, **kwargs)
 
 
+@dataclass
+class TrickyTypes:
+    reloader: "PartialReloader"
+    modules: Modules = field(init=False)
+    runner: Thread = field(init=False)
+    tricky_types: List[type] = field(init=False, default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.user_modules = self.reloader.modules.user_modules
+        self.runner = Thread(target=self._run)
+
+    def start(self):
+        self.runner.start()
+
+    def _run(self) -> None:
+        self.tricky_types = []
+
+        # wait until importing is done
+        while dependency_watcher.seconds_from_last_import() <= 1.0:
+            sleep(0.1)
+
+        for m in self.user_modules.keys():
+            self.collect_diffs_from_module(Path(m))
+
+    def python_obj_to_dict(self, obj, classkey=None):
+        if isinstance(obj, type):
+            return obj
+
+        if isinstance(obj, dict):
+            data = {}
+            for (k, v) in obj.items():
+                data[k] = self.python_obj_to_dict(v, classkey)
+            return data
+        elif hasattr(obj, "_ast"):
+            return self.python_obj_to_dict(obj._ast())
+        elif hasattr(obj, "__iter__") and not isinstance(obj, str):
+            return [self.python_obj_to_dict(v, classkey) for v in obj]
+        elif hasattr(obj, "__dict__"):
+            data = dict([(key, self.python_obj_to_dict(value, classkey))
+                         for key, value in dict(inspect.getmembers(obj)).items()
+                         if not callable(value)])
+            if classkey is not None and hasattr(obj, "__class__"):
+                data[classkey] = obj.__class__.__name__
+            return data
+        else:
+            return obj
+
+    def wait_until_finished(self) -> None:
+        while not self.finished():
+            sleep(0.1)
+
+    def finished(self) -> bool:
+        ret = not self.runner.is_alive()
+        return ret
+
+    def collect_diffs_from_module(self, module_file: Path) -> None:
+        actions = self.reloader.get_actions(module_file)
+        update_actions = [a for a in actions if isinstance(a, Object.Update)]
+
+        for a in update_actions:
+            left = self.python_obj_to_dict(a.object.python_obj)
+            right = self.python_obj_to_dict(a.new_object.python_obj)
+            pass
+
+
+@dataclass
 class PartialReloader:
+    root: Path
     logger: Logger
-    named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleType]]
-    obj_to_modules: DefaultDict[int, Set[ModuleType]]
+    named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleType]] = field(init=False,
+                                                                                default_factory=lambda: defaultdict(set))
+    obj_to_modules: DefaultDict[int, Set[ModuleType]] = field(init=False,
+                                                              default_factory=lambda: defaultdict(set))
+    applied_actions: List[Action] = field(init=False, default_factory=list)
+    modules: Modules = field(init=False)
+    tricky_types: TrickyTypes = field(init=False)
 
-    def __init__(self, root: Path, logger: Any) -> None:
-        logger.debug(f"Creating partial reloader for {root}")
-        self.root = root.resolve()
-        self.logger = logger
-
-        self.named_obj_to_modules = defaultdict(set)
-        self.obj_to_modules = defaultdict(set)
-        self.applied_actions = []
+    def __post_init__(self) -> None:
+        self.root = self.root.resolve()
+        self.logger.debug(f"Creating partial reloader for {self.root}")
 
         self.modules = Modules(self, sys.modules)
         sys.modules = self.modules
+        self.tricky_types = TrickyTypes(reloader=self)
+        self.tricky_types.start()
 
     def _reset(self) -> None:
         self.named_obj_to_modules = defaultdict(set)
@@ -1021,7 +1104,10 @@ class PartialReloader:
 
         for m in module_objs:
             old_module = Module(python_obj=m, reloader=self, name=f"{m.__name__}")
-            self.applied_actions.append(Module.Update(reloader=self, object=old_module))
+            action = Module.Update(reloader=self, object=old_module)
+            action.log()
+            self.applied_actions.append(action)
+
             new_module = self.get_new_module(old_module)
             actions.extend(old_module.get_actions_for_update(new_module))
 
@@ -1061,9 +1147,11 @@ class PartialReloader:
                 sorted_modules.pop(0)
 
             self.obj_to_modules[o_id] = set(sorted_modules)
+        pass
 
     def _reload(self, module_file: Path) -> None:
-        for a in self.get_actions(module_file):
+        actions = self.get_actions(module_file)
+        for a in actions:
             a.execute()
 
     def reload(self, module_file: Path) -> None:
@@ -1073,8 +1161,6 @@ class PartialReloader:
         self._reset()
 
         self._collect_all_dependencies()
-
-        self.logger.info(f"Reloading {module_file}")
 
         self._reload(module_file)
 
@@ -1086,3 +1172,4 @@ class PartialReloader:
 
         for a in rollback_actions:
             a.execute()
+

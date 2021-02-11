@@ -1,6 +1,8 @@
 import sys
 from collections import defaultdict
 from typing import DefaultDict, Dict, Set
+import time
+
 
 try:
     import builtins
@@ -21,8 +23,8 @@ def disable():
 
 
 _default_level = -1 if sys.version_info < (3, 3) else 0
-
 module_file_to_start_import_usages: DefaultDict[str, Set[str]] = defaultdict(set)
+last_import_time = time.time()
 
 
 def is_file_foreign(file: str):
@@ -70,7 +72,16 @@ def extract_star_import_info(module, globals, fromlist):
     module_file_to_start_import_usages[imported_module_file].add(parent_module_file)
 
 
+def seconds_from_last_import() -> float:
+    global last_import_time
+    ret = time.time() - last_import_time
+    return ret
+
+
 def _import(name, globals=None, locals=None, fromlist=None, level=_default_level):
+    global last_import_time
+    last_import_time = time.time()
+
     init_import(globals)
     base = _baseimport(name, globals, locals, fromlist, level)
 

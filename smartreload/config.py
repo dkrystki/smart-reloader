@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 class BaseConfig:
-    def on_start(self) -> None:
+    def on_start(self, argv: List[str]) -> None:
         pass
 
     def before_full_reload(self, file: Path, reason: Exception) -> None:

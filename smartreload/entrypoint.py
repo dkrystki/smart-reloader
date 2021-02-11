@@ -6,11 +6,12 @@ from textwrap import dedent
 from threading import Thread
 from time import sleep
 from typing import List, Optional
+import uuid
 
 
 class SmartReload:
     def __init__(self):
-        self.seed_file = Path("__smartreload__.py")
+        self.seed_file = Path(f"__smartreload_{uuid.uuid4()}__.py")
 
     def create_seed(
         self, root: Path, entry_point_file: Path, argv: List[str], is_binary: bool
@@ -30,6 +31,8 @@ class SmartReload:
         from smartreload.misc import import_from_file
         dependency_watcher.enable()
         
+        sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
+        
         config_file = Path("smartreload_config.py")
         
         if config_file.exists():
@@ -39,9 +42,8 @@ class SmartReload:
             config = BaseConfig()
         
         from smartreload.reloader import Reloader
-        Reloader("{str(root)}", config).start()
         
-        sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
+        Reloader("{str(root)}", config).start()
         
         loader = importlib.machinery.SourceFileLoader("__main__", "{str(entry_point_file)}")
         spec = importlib.util.spec_from_loader("__main__", loader)

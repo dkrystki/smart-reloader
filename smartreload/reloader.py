@@ -92,7 +92,7 @@ class Reloader(FileSystemEventHandler):
     def start(self) -> None:
         # self.logger.debug("Starting observer")
 
-        self.config.on_start()
+        self.config.on_start(sys.argv)
 
         if is_linux():
 

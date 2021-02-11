@@ -503,3 +503,46 @@ class TestModules(utils.TestBase):
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_in("tesla_car_2")
+
+    def test_added_object_not_in_all(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module(
+            "__init__.py",
+            """
+        from . import slave_module
+        from . import module
+        """,
+        )
+
+        slave_module = Module(
+            "slave_module.py",
+            """
+        __all__ = ["tesla_car_1"]
+        tesla_car_1 = "Model S"
+        """,
+        )
+
+        module = Module(
+            "module.py",
+            """
+        from .slave_module import *
+        """,
+        )
+        init.load()
+
+        slave_module.device = init.device.slave_module
+        module.device = init.device.module
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_not_in("tesla_car_2")
+
+        slave_module.append('tesla_car_2 = "Model 3"')
+
+        reloader.reload(slave_module)
+
+        reloader.assert_actions('Update: Module: sandbox.slave_module',
+                                'Add: Variable: sandbox.slave_module.tesla_car_2')
+
+        module.assert_obj_in("tesla_car_1")
+        module.assert_obj_not_in("tesla_car_2")

@@ -1,3 +1,6 @@
+from pytest import raises
+
+from smartreload import FullReloadNeeded
 from tests import utils
 from tests.utils import Module, Reloader
 
@@ -228,16 +231,8 @@ class TestClasses(utils.TestBase):
         """
         )
 
-        reloader.reload(module)
-
-        reloader.assert_actions(
-            "Update: Module: module",
-            "Delete: Class: module.Carwash",
-            "Add: Class: module.Carwash",
-        )
-
-        assert isinstance(module.device.Carwash(30), module.device.CarwashBase)
-        assert module.device.Carwash(30).car_n == 30
+        with raises(FullReloadNeeded):
+            reloader.reload(module)
 
     def test_type_as_attribute(self, sandbox):
         reloader = Reloader(sandbox)
