@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+
 from pathlib import Path
 from textwrap import dedent
 from threading import Thread
@@ -29,7 +30,6 @@ class SmartReload:
         
         from smartreload import dependency_watcher
         from smartreload.misc import import_from_file
-        dependency_watcher.enable()
         
         sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
         
@@ -45,7 +45,7 @@ class SmartReload:
         
         Reloader("{str(root)}", config).start()
         
-        loader = importlib.machinery.SourceFileLoader("__main__", "{str(entry_point_file)}")
+        loader = dependency_watcher.MyLoader("__main__", "{str(entry_point_file)}")
         spec = importlib.util.spec_from_loader("__main__", loader)
         module = importlib.util.module_from_spec(spec)
         {set_module}
@@ -81,11 +81,13 @@ class SmartReload:
     def main(self):
         argv = sys.argv[1:]
 
-        entry_point_file: Optional[Path] = None
+        to_remove = ["python", "python3", "-m"]
 
-        # if call as executable
-        if "python" not in argv:
-            entry_point_file = self.get_path_from_binary(argv[0])
+        for r in to_remove:
+            if r in argv:
+                argv.remove(r)
+
+        entry_point_file = self.get_path_from_binary(argv[0])
 
         if not entry_point_file:
             module_name = argv[0]

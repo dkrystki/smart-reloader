@@ -22,9 +22,9 @@ class TestFunctions(utils.TestBase):
 
         module.append(
             """
-                def fun2(arg1: str, arg2: str) -> str:
-                    return f"{arg1}_{arg2}_{id(global_var)}"
-                """
+        def fun2(arg1: str, arg2: str) -> str:
+            return f"{arg1}_{arg2}_{id(global_var)}"
+        """
         )
 
         reloader.reload(module)
@@ -35,6 +35,9 @@ class TestFunctions(utils.TestBase):
         module.assert_obj_in("fun2")
 
         assert module.device.fun("str1", "str2") == module.device.fun2("str1", "str2")
+
+        reloader.rollback()
+        module.assert_not_changed()
 
     def test_modified_function(self, sandbox):
         reloader = Reloader(sandbox)
@@ -53,6 +56,14 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         fun_id_before = id(module.device.fun)
+        global_var_id = id(module.device.global_var)
+
+        def assert_not_reloaded():
+            assert module.device.fun("str1", "str2").endswith(str(global_var_id))
+            assert module.device.fun("str1", "str2").startswith("str1_str2")
+            assert id(module.device.fun) == fun_id_before
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -72,10 +83,11 @@ class TestFunctions(utils.TestBase):
 
         module.assert_obj_in("fun")
 
-        global_var_id = id(module.device.global_var)
-
         assert module.device.fun("str1").endswith(str(global_var_id))
         assert id(module.device.fun) == fun_id_before
+
+        reloader.rollback()
+        module.assert_not_changed()
 
     def test_deleted_function(self, sandbox):
         reloader = Reloader(sandbox)
@@ -93,9 +105,6 @@ class TestFunctions(utils.TestBase):
 
         module.load()
 
-        assert hasattr(module.device, "fun1")
-        assert hasattr(module.device, "fun2")
-
         module.rewrite(
             """
         def fun1():
@@ -112,6 +121,9 @@ class TestFunctions(utils.TestBase):
         assert hasattr(module.device, "fun1")
         assert not hasattr(module.device, "fun2")
 
+        reloader.rollback()
+        module.assert_not_changed()
+
     def test_renamed_function(self, sandbox):
         reloader = Reloader(sandbox)
 
@@ -124,9 +136,6 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
-
-        assert hasattr(module.device, "fun1")
-        assert not hasattr(module.device, "fun_renamed")
 
         module.rewrite(
             """
@@ -144,6 +153,9 @@ class TestFunctions(utils.TestBase):
 
         assert not hasattr(module.device, "fun1")
         assert hasattr(module.device, "fun_renamed")
+
+        reloader.rollback()
+        module.assert_not_changed()
 
     def test_uses_class(self, sandbox):
         reloader = Reloader(sandbox)
@@ -168,6 +180,14 @@ class TestFunctions(utils.TestBase):
         car_class_id = id(module.device.Car)
         fun_id = id(module.device.fun)
 
+        def assert_not_reloaded():
+            assert module.device.fun().colour == "red"
+            assert id(module.device.Car) == car_class_id
+            assert id(module.device.fun) == fun_id
+            assert isinstance(module.device.fun(), module.device.Car)
+
+        assert_not_reloaded()
+
         module.replace('car = Car("red")', 'car = Car("green")')
 
         reloader.reload(module)
@@ -180,9 +200,12 @@ class TestFunctions(utils.TestBase):
         assert id(module.device.fun) == fun_id
 
         assert isinstance(module.device.fun(), module.device.Car)
-        assert isinstance(module.device.fun(), module.device.Car)
 
         assert module.device.fun().colour == "green"
+
+        reloader.rollback()
+        assert_not_reloaded()
+        module.assert_not_changed()
 
     def test_uses_function(self, sandbox):
         reloader = Reloader(sandbox)
@@ -199,7 +222,6 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
-        assert module.device.fun() == 15
 
         module.replace("return 5", "return 10")
 
@@ -209,6 +231,9 @@ class TestFunctions(utils.TestBase):
         )
 
         assert module.device.fun() == 20
+
+        reloader.rollback()
+        module.assert_not_changed()
 
     def test_uses_function_2(self, sandbox):
         reloader = Reloader(sandbox)
@@ -225,8 +250,6 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
-        assert module.device.fun() == 15
-
         module.rewrite(
             """
         def other_fun():
@@ -246,6 +269,9 @@ class TestFunctions(utils.TestBase):
 
         assert module.device.fun() == 25
 
+        reloader.rollback()
+        module.assert_not_changed()
+
     def test_uses_added_function(self, sandbox):
         reloader = Reloader(sandbox)
 
@@ -258,8 +284,6 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
-        assert module.device.fun() == 10
-
         module.rewrite(
             """
         def other_fun():
@@ -278,6 +302,9 @@ class TestFunctions(utils.TestBase):
         )
 
         assert module.device.fun() == 20
+
+        reloader.rollback()
+        module.assert_not_changed()
 
     def test_moves_functions_first_lines(self):
         assert False

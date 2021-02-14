@@ -2,6 +2,7 @@ from pytest import raises
 
 from tests import utils
 from tests.utils import Module, Reloader
+from smartreload import dependency_watcher
 
 
 class TestGlobalVariable(utils.TestBase):
@@ -65,14 +66,12 @@ class TestGlobalVariable(utils.TestBase):
 
         init.load()
 
-        carwash.device = init.device.carwash
-        car.device = init.device.car
-        accounting.device = init.device.accounting
-        client.device = init.device.client
-        boss.device = init.device.boss
+        carwash.load_from(init)
+        car.load_from(init)
+        accounting.load_from(init)
 
-        assert carwash.device.sprinkler_n == 3
-        assert car.device.car_sprinklers == 1
+        client.load_from(init)
+        boss.load_from(init)
 
         carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
 
@@ -99,36 +98,12 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-
-        assert carwash.device.sprinkler_n == 3
-        assert car.device.sprinkler_n == 3
-        assert car.device.car_sprinklers == 1
-        assert accounting.device.car_sprinklers == 1
-        assert accounting.device.sprinklers_from_accounting == 10
-        assert client.device.client_car_sprinklers == 1
-
-        reloader.assert_actions(
-            "Update: Module: sandbox.carwash",
-            "Update: Variable: sandbox.carwash.sprinkler_n",
-            "Update: Module: sandbox.car",
-            "Update: Variable: sandbox.car.sprinkler_n",
-            "Update: Variable: sandbox.car.car_sprinklers",
-            "Update: Module: sandbox.accounting",
-            "Update: Variable: sandbox.accounting.car_sprinklers",
-            "Update: Variable: sandbox.accounting.sprinklers_from_accounting",
-            "Update: Module: sandbox.client",
-            "Update: Variable: sandbox.client.client_car_sprinklers",
-            "Rollback: Update: Variable: sandbox.client.client_car_sprinklers",
-            "Rollback: Update: Module: sandbox.client",
-            "Rollback: Update: Variable: sandbox.accounting.sprinklers_from_accounting",
-            "Rollback: Update: Variable: sandbox.accounting.car_sprinklers",
-            "Rollback: Update: Module: sandbox.accounting",
-            "Rollback: Update: Variable: sandbox.car.car_sprinklers",
-            "Rollback: Update: Variable: sandbox.car.sprinkler_n",
-            "Rollback: Update: Module: sandbox.car",
-            "Rollback: Update: Variable: sandbox.carwash.sprinkler_n",
-            "Rollback: Update: Module: sandbox.carwash",
-        )
+        carwash.assert_not_changed()
+        init.assert_not_changed()
+        car.assert_not_changed()
+        accounting.assert_not_changed()
+        client.assert_not_changed()
+        boss.assert_not_changed()
 
     def test_modified_import_star(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -158,11 +133,8 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         init.load()
-        carwash.device = init.device.carwash
-        car.device = init.device.car
-
-        assert carwash.device.sprinkler_n == 3
-        assert car.device.car_sprinklers == 1
+        carwash.load_from(init)
+        car.load_from(init)
 
         carwash.rewrite(
             """
@@ -185,9 +157,8 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-
-        assert carwash.device.sprinkler_n == 3
-        assert car.device.car_sprinklers == 1
+        carwash.assert_not_changed()
+        car.assert_not_changed()
 
     def test_modified_import_star_nested_twice(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -225,12 +196,9 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         init.load()
-        carwash.device = init.device.carwash
-        container.device = init.device.container
-        car.device = init.device.car
-
-        assert carwash.device.sprinkler_n == 3
-        assert car.device.car_sprinklers == 1
+        carwash.load_from(init)
+        container.load_from(init)
+        car.load_from(init)
 
         carwash.rewrite(
             """
@@ -255,8 +223,10 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-        assert carwash.device.sprinkler_n == 3
-        assert car.device.car_sprinklers == 1
+        init.assert_not_changed()
+        carwash.assert_not_changed()
+        container.assert_not_changed()
+        car.assert_not_changed()
 
     def test_added_global_var(self, sandbox):
         reloader = Reloader(sandbox)
@@ -269,6 +239,7 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
+
         module.append("global_var2 = 2")
 
         reloader.reload(module)
@@ -285,9 +256,7 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-        assert module.device.global_var1 == 1
-        module.assert_obj_in("global_var1")
-        module.assert_obj_not_in("global_var2")
+        module.assert_not_changed()
 
     def test_fixes_class_references(self, sandbox):
         reloader = Reloader(sandbox)
@@ -305,6 +274,7 @@ class TestGlobalVariable(utils.TestBase):
         module.load()
 
         old_Car_class = module.device.Car
+
         module.replace("car_class = None", "car_class = Car")
 
         reloader.reload(module)
@@ -318,8 +288,7 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-        assert module.device.Car is old_Car_class
-        assert module.device.car_class is None
+        module.assert_not_changed()
 
     def test_fixes_function_references(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -335,7 +304,6 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
-
         old_fun = module.device.fun
 
         module.replace("car_fun = None", "car_fun = fun")
@@ -352,8 +320,7 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-        assert module.device.fun is old_fun
-        assert module.device.car_fun is None
+        module.assert_not_changed()
 
     def test_modified_global_var(self, sandbox):
         reloader = Reloader(sandbox)
@@ -387,7 +354,22 @@ class TestGlobalVariable(utils.TestBase):
         print_sprinkler_id = id(module.device.print_sprinkler)
         lambda_fun_id = id(module.device.sample_dict["lambda_fun"])
         some_fun_id = id(module.device.some_fun)
-        assert module.device.sprinkler_n == 1
+
+        def assert_not_reloaded():
+            assert module.device.sprinkler_n == 1
+
+            assert print_sprinkler_id == id(module.device.print_sprinkler)
+            assert module.device.Car.car_sprinkler_n == 1
+            assert lambda_fun_id == id(module.device.sample_dict["lambda_fun"])
+            assert some_fun_id == id(module.device.some_fun)
+            assert module.device.sample_dict == {
+                "sprinkler_n_plus_1": 2,
+                "sprinkler_n_plus_2": 3,
+                "lambda_fun": module.device.sample_dict["lambda_fun"],
+                "fun": module.device.some_fun,
+            }
+
+        assert_not_reloaded()
 
         module.replace("sprinkler_n = 1", "sprinkler_n = 2")
 
@@ -414,18 +396,8 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-        assert module.device.sprinkler_n == 1
-
-        assert print_sprinkler_id == id(module.device.print_sprinkler)
-        assert module.device.Car.car_sprinkler_n == 1
-        assert lambda_fun_id == id(module.device.sample_dict["lambda_fun"])
-        assert some_fun_id == id(module.device.some_fun)
-        assert module.device.sample_dict == {
-            "sprinkler_n_plus_1": 2,
-            "sprinkler_n_plus_2": 3,
-            "lambda_fun": module.device.sample_dict["lambda_fun"],
-            "fun": module.device.some_fun,
-        }
+        assert_not_reloaded()
+        module.assert_not_changed()
 
     def test_deleted_global_var(self, sandbox):
         reloader = Reloader(sandbox)
@@ -433,15 +405,12 @@ class TestGlobalVariable(utils.TestBase):
         module = Module(
             "module.py",
             """
-        sprinkler_n = 1
         cars_n = 1
+        sprinkler_n = 1
         """,
         )
 
         module.load()
-
-        assert hasattr(module.device, "sprinkler_n")
-        assert hasattr(module.device, "cars_n")
 
         module.delete("sprinkler_n = 1")
 
@@ -456,5 +425,4 @@ class TestGlobalVariable(utils.TestBase):
 
         # Test rollback
         reloader.rollback()
-        assert hasattr(module.device, "sprinkler_n")
-        assert hasattr(module.device, "cars_n")
+        module.assert_not_changed()

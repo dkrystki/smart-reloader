@@ -1,6 +1,8 @@
 import sys
+import types
 from collections import defaultdict
-from typing import DefaultDict, Dict, Set
+from types import ModuleType
+from typing import DefaultDict, Dict, Set, List
 import time
 
 
@@ -12,10 +14,44 @@ except ImportError:
 
 _baseimport = builtins.__import__
 
+import sys
+from os.path import isdir
+from importlib import invalidate_caches
+from importlib.machinery import FileFinder
+from importlib import invalidate_caches
+from importlib.machinery import SourceFileLoader
+
+class MyLoader(SourceFileLoader):
+    def exec_module(self, module: types.ModuleType) -> None:
+        init_import(module)
+        super().exec_module(module)
+        post_import(module)
+
+
+once = False
+
 
 def enable():
+    global once
+
+    if once:
+        return
+
     builtins.__import__ = _import
 
+    hook_index, hook = next((i, h) for i, h in enumerate(sys.path_hooks) if "FileFinder" in h.__name__)
+
+    def new_hook(path: str):
+        finder = hook(path)
+        if "site-packages" in path or "python3" in path:
+            return finder
+        finder._loaders.insert(0, (".py", MyLoader))
+        return finder
+
+    sys.path_hooks[hook_index] = new_hook
+    sys.path_importer_cache.clear()
+    invalidate_caches()
+    once = True
 
 def disable():
     global _baseimport
@@ -24,7 +60,16 @@ def disable():
 
 _default_level = -1 if sys.version_info < (3, 3) else 0
 module_file_to_start_import_usages: DefaultDict[str, Set[str]] = defaultdict(set)
+import_order: List[str] = []
 last_import_time = time.time()
+
+
+def reset():
+    global module_file_to_start_import_usages
+    global import_order
+
+    module_file_to_start_import_usages = defaultdict(set)
+    import_order = []
 
 
 def is_file_foreign(file: str):
@@ -34,11 +79,14 @@ def is_file_foreign(file: str):
     return ret
 
 
-def init_import(globals):
-    if not globals:
+def init_import(module: ModuleType):
+    if not module:
         return
 
-    module_file = globals.get("__file__", None)
+    if not hasattr(module, "__file__"):
+        return
+
+    module_file = module.__file__
 
     if not module_file:
         return
@@ -46,13 +94,18 @@ def init_import(globals):
     if is_file_foreign(module_file):
         return
 
+    clear_start_import_usages(module_file)
+
+
+def clear_start_import_usages(module_file: str):
+    # clear all usages
     for f, usages in module_file_to_start_import_usages.copy().items():
         if module_file not in module_file_to_start_import_usages[f]:
             continue
         module_file_to_start_import_usages[f].remove(module_file)
 
 
-def extract_star_import_info(module, globals, fromlist):
+def extract_star_import_info(module: ModuleType, globals, fromlist):
     if not globals:
         return
 
@@ -78,14 +131,36 @@ def seconds_from_last_import() -> float:
     return ret
 
 
+def post_import(module: ModuleType):
+    try:
+        module_file = getattr(module, "__file__", None)
+    except:
+        return
+
+    if not module_file:
+        return
+
+    if is_file_foreign(module_file):
+        return
+
+    if hasattr(module, "__file__") and module.__file__ not in import_order:
+        import_order.append(module.__file__)
+
+
 def _import(name, globals=None, locals=None, fromlist=None, level=_default_level):
     global last_import_time
     last_import_time = time.time()
 
-    init_import(globals)
     base = _baseimport(name, globals, locals, fromlist, level)
 
     if base is not None and fromlist and "*" in fromlist:
         extract_star_import_info(base, globals, fromlist)
 
+    # if fromlist:
+    #     for m in fromlist:
+    #         if m == "*":
+    #             continue
+    #         post_import(getattr(base, m))
+
     return base
+

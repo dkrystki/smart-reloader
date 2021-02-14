@@ -1,6 +1,7 @@
 import ast
 import inspect
 import os
+import ast
 import re
 import sys
 from collections import OrderedDict, defaultdict
@@ -25,8 +26,6 @@ from typing import (
     Tuple,
     Type,
 )
-
-from deepdiff import DeepDiff
 
 from . import console, dependency_watcher, misc
 
@@ -60,26 +59,30 @@ class FullReloadNeeded(Exception):
 
 
 @dataclass
-class Action:
-    object: "Object"
+class BaseAction:
     reloader: "PartialReloader"
     priority: ClassVar[int] = field(init=False, default=100)
 
     def log(self) -> None:
         self.reloader.logger.info(str(self))
 
-    def pre_execute(self) -> None:
-        self.reloader.applied_actions.append(self)
-        self.log()
-
     def rollback(self) -> None:
         pass
 
-    def __eq__(self, other: "Action") -> bool:
+    def __eq__(self, other: "BaseAction") -> bool:
         raise NotImplementedError()
 
     def execute(self) -> None:
         raise NotImplementedError()
+
+    def pre_execute(self) -> None:
+        self.reloader.applied_actions.append(self)
+        self.log()
+
+
+@dataclass
+class Action(BaseAction):
+    object: "Object"
 
 
 @dataclass
@@ -136,22 +139,11 @@ class Object:
             super().rollback()
             self.parent.set_attr(self.object.name, self.object.python_obj)
 
-    @dataclass
-    class Rollback(Action):
-        action: Action
-
-        def __repr__(self) -> str:
-            return f"Rollback: {repr(self.action)}"
-
-        def execute(self) -> None:
-            self.pre_execute()
-            self.action.rollback()
-
     python_obj: Any
     reloader: "PartialReloader"
-    name: str = ""
-    module: Optional["Module"] = None
-    parent: Optional["ContainerObj"] = None
+    name: Optional[str]
+    module: Optional["Module"]
+    parent: Optional["ContainerObj"]
 
     def __post_init__(self) -> None:
         self.module.register_obj(self)
@@ -161,7 +153,7 @@ class Object:
         ret = self.full_name.split(".")[-1]
         return ret
 
-    def get_actions_for_update(self, new_object: "Object") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Object") -> List["BaseAction"]:
         if self.safe_compare(new_object):
             return []
 
@@ -204,7 +196,7 @@ class Object:
 
     def get_actions_for_add(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
-    ) -> List["Action"]:
+    ) -> List["BaseAction"]:
         ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
         if self.is_in_all():
             ret.extend(self.get_star_import_updates_actions())
@@ -219,7 +211,7 @@ class Object:
 
     def get_actions_for_delete(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
-    ) -> List["Action"]:
+    ) -> List["BaseAction"]:
         ret = [self.Delete(reloader=reloader, parent=parent, object=obj)]
         ret.extend(self.get_actions_for_dependent_modules())
         if self.is_in_all():
@@ -281,39 +273,33 @@ class Object:
         ret = [o.python_obj for o in self.get_parents_flat()]
         return ret
 
-    def get_actions_for_dependent_modules(self) -> List[Action]:
+    def get_actions_for_dependent_modules(self) -> List[BaseAction]:
         ret = []
 
-        modules = copy(
+        module_descrs = copy(
             self.reloader.named_obj_to_modules[self.name, id(self.python_obj)]
         )
 
         potential_indirect_use_modules = copy(
             self.reloader.obj_to_modules[id(self.parent.python_obj)]
         )
-        for m in potential_indirect_use_modules:
+        for m_descr in potential_indirect_use_modules:
             if (
                 f"{self.parent.bare_name}.{self.name}"
-                not in Path(m.__file__).read_text()
+                not in m_descr.source.content
             ):
                 continue
-            modules.add(m)
+            module_descrs.add(m_descr)
 
-        if self.module.python_obj in modules:
-            modules.remove(self.module.python_obj)
-
-        for m in copy(modules):
-            if self.reloader.is_already_reloaded(m) and m in modules:
-                modules.remove(m)
+        if self.module.python_obj in module_descrs:
+            module_descrs.remove(self.module.python_obj)
 
         # sort
-        modules = list(modules)
-        all_modules = list(sys.modules.values())
-        modules.sort(key=lambda x: all_modules.index(x))
+        module_descrs = list(module_descrs)
+        module_descrs = sorted(module_descrs, key=lambda x: dependency_watcher.import_order.index(str(x.path)))
 
-        for m in modules:
-            module = Module(m, reloader=self.reloader)
-            ret.append(Module.Update(reloader=self.reloader, object=module))
+        for m_descr in module_descrs:
+            ret.append(UpdateModule(reloader=self.reloader, module_file=m_descr.path))
 
         return ret
 
@@ -339,7 +325,7 @@ class Object:
     def get_flat_repr(self) -> Dict[str, "Object"]:
         return {self.full_name: self}
 
-    def get_star_import_updates_actions(self) -> List[Action]:
+    def get_star_import_updates_actions(self) -> List[BaseAction]:
         ret = []
         star_import_modules = dependency_watcher.module_file_to_start_import_usages[
             str(self.module.file)
@@ -349,8 +335,7 @@ class Object:
             modules = self.reloader.modules.user_modules[module_path]
 
             for m in modules:
-                module = Module(m, reloader=self.reloader)
-                ret.append(Module.Update(reloader=self.reloader, object=module))
+                ret.append(UpdateModule(reloader=self.reloader, module_file=m.path))
 
         return ret
 
@@ -383,14 +368,23 @@ class Function(FinalObj):
     class Update(FinalObj.Update):
         object: "Function"
         new_object: Optional["Function"]
+        old_code: CodeType = field(init=False)
 
         def execute(self) -> None:
             self.pre_execute()
+            self.old_code = self.object.get_func(
+                self.object.python_obj
+            ).__code__
+
             self.object.get_func(
                 self.object.python_obj
             ).__code__ = self.new_object.get_func(self.new_object.python_obj).__code__
 
-    def get_actions_for_update(self, new_object: "Function") -> List["Action"]:
+        def rollback(self) -> None:
+            super().rollback()
+            self.object.get_func(self.object.python_obj).__code__ = self.old_code
+
+    def get_actions_for_update(self, new_object: "Function") -> List["BaseAction"]:
         if self != new_object:
             return [
                 self.Update(
@@ -492,8 +486,9 @@ class ContainerObj(Object):
     def _python_obj_to_obj_classes(
         self, name: str, obj: Any
     ) -> Dict[str, Type[Object]]:
-        if id(obj) in self.module.python_obj_to_objs and not self.is_primitive(obj):
-            return {name: Reference}
+        if self.module:
+            if id(obj) in self.module.python_obj_to_objs and not self.is_primitive(obj):
+                return {name: Reference}
 
         if inspect.isclass(obj) and not self.is_foreign_obj(obj):
             # if the name is different that the class name it means it's just a reference not actualy class definition
@@ -536,7 +531,7 @@ class ContainerObj(Object):
         ret = inspect.getsource(self.python_obj)
         return ret
 
-    def get_actions_for_update(self, new_object: Object) -> List[Action]:
+    def get_actions_for_update(self, new_object: Object) -> List[BaseAction]:
         ret = []
 
         a = self.children
@@ -565,6 +560,8 @@ class ContainerObj(Object):
                 continue
 
             ret.extend(o.get_actions_for_update(new_object=b[n]))
+
+        ret.sort(key=lambda a: a.priority, reverse=True)
 
         return ret
 
@@ -605,7 +602,7 @@ class Class(ContainerObj):
     def __post_init__(self):
         super().__post_init__()
 
-    def get_actions_for_update(self, new_object: "Class") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Class") -> List["BaseAction"]:
         if str(self.python_obj.__mro__) == str(new_object.python_obj.__mro__):
             return super().get_actions_for_update(new_object)
         else:
@@ -654,7 +651,7 @@ class Class(ContainerObj):
 
     def get_actions_for_add(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
-    ) -> List["Action"]:
+    ) -> List["BaseAction"]:
         ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
         ret.extend(self.get_actions_for_dependent_modules())
         return ret
@@ -680,8 +677,10 @@ class Method(Function):
 
         def execute(self) -> None:
             self.pre_execute()
+            self.old_code = self.object.python_obj.__code__
             fun = self.object.get_fixed_fun(self.new_object.python_obj, self.parent)
             code = self.object.get_code_with_source_file_info(fun, self.new_object)
+
             self.object.python_obj.__code__ = code
 
     @classmethod
@@ -764,7 +763,7 @@ class Variable(FinalObj):
 
 @dataclass
 class All(FinalObj):
-    def get_actions_for_update(self, new_object: "All") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "All") -> List["BaseAction"]:
         if new_object.python_obj == self.python_obj:
             return []
         ret = [self.Update(
@@ -779,7 +778,7 @@ class All(FinalObj):
 
 @dataclass
 class ClassVariable(Variable):
-    def get_actions_for_update(self, new_object: "Variable") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Variable") -> List["BaseAction"]:
         if self.safe_compare(new_object):
             return []
 
@@ -812,7 +811,7 @@ class ClassVariable(Variable):
 
 @dataclass
 class DictionaryItem(FinalObj):
-    def get_actions_for_update(self, new_object: "Variable") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Variable") -> List["BaseAction"]:
 
         if self.safe_compare(new_object):
             return []
@@ -838,49 +837,51 @@ class Import(FinalObj):
             module = sys.modules.get(self.object.name, self.object.python_obj)
             setattr(self.parent.python_obj, self.object.name, module)
 
-    def get_actions_for_update(self, new_object: "Variable") -> List["Action"]:
+    def get_actions_for_update(self, new_object: "Variable") -> List["BaseAction"]:
         return []
 
-    def get_actions_for_add(
-        self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
-    ) -> List["Action"]:
-        ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
-        ret.extend(self.get_actions_for_dependent_modules())
-        return ret
+    # def get_actions_for_add(
+    #     self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
+    # ) -> List["BaseAction"]:
+    #     ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
+    #     ret.extend(self.get_actions_for_dependent_modules())
+    #     return ret
 
     def get_actions_for_delete(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
-    ) -> List["Action"]:
+    ) -> List["BaseAction"]:
         return []
 
 
 @dataclass
+class Source:
+    path: Path
+    content: str = field(init=False)
+    syntax: ast.AST = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.content = self.path.read_text()
+        self.syntax = ast.parse(self.content, str(self.path))
+        pass
+
+
+@dataclass
 class Module(ContainerObj):
+    module_descriptor: "ModuleDescriptor"
     flat: Dict[str, Object] = field(init=False, default_factory=dict)
     python_obj_to_objs: Dict[int, List[Object]] = field(
         init=False, default_factory=lambda: defaultdict(list)
     )
 
-    @dataclass
-    class Update(Action):
-        priority = 50
-
-        def execute(self) -> None:
-            if self.reloader.is_already_reloaded(self.object.python_obj):
-                return
-
-            self.reloader._reload(self.object.file)
-
-        def __repr__(self) -> str:
-            return f"Update: {repr(self.object)}"
-
     def __post_init__(self) -> None:
+        self.python_obj = self.module_descriptor.module
+        self.name = self.module_descriptor.name
         self.module = self
-        super().__post_init__()
+        self._collect_children()
 
     @property
     def file(self) -> Path:
-        ret = Path(self.python_obj.__file__)
+        ret = self.module_descriptor.path
         return ret
 
     def _python_obj_to_obj_classes(
@@ -899,7 +900,7 @@ class Module(ContainerObj):
         return {name: Variable}
 
     def get_dict(self) -> "OrderedDict[str, Any]":
-        return self.python_obj.__dict__
+        return OrderedDict(self.python_obj.__dict__)
 
     @classmethod
     def _is_ignored(cls, name: str) -> bool:
@@ -922,7 +923,7 @@ class Module(ContainerObj):
         self.python_obj_to_objs[id(obj.python_obj)].append(obj)
 
     def __repr__(self) -> str:
-        return f"Module: {self.python_obj.__name__}"
+        return f"Module: {self.module_descriptor.name}"
 
     def get_flat_repr(self) -> Dict[str, Object]:
         ret = {self.name: self}
@@ -933,13 +934,77 @@ class Module(ContainerObj):
 
 
 @dataclass
+class UpdateModule(BaseAction):
+    module_file: Path
+    priority = 50
+    module_descriptor: "ModuleDescriptor" = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.module_descriptor = sys.modules.user_modules[str(self.module_file)][0]
+
+    def execute(self) -> None:
+        self.pre_execute()
+
+        old_module = Module(module_descriptor=self.module_descriptor,
+                            reloader=self.reloader, name=None,
+                            python_obj=None,
+                            parent=None,
+                            module=None)
+
+        trace = sys.gettrace()
+        sys.settrace(None)
+        module_obj = misc.import_from_file(old_module.file, self.reloader.root)
+        sys.settrace(trace)
+
+        module_descriptor = ModuleDescriptor(name=old_module.module_descriptor.name,
+                                             path=old_module.module_descriptor.path,
+                                             module=module_obj)
+        new_module = Module(
+            module_descriptor=module_descriptor,
+            reloader=self.reloader,
+            name=old_module.name,
+            python_obj=None,
+            parent=None,
+            module=None)
+
+        actions = old_module.get_actions_for_update(new_module)
+        actions.sort(key=lambda a: a.priority, reverse=True)
+
+        for a in actions:
+            if isinstance(a, UpdateModule) and self.reloader.is_already_reloaded(a.module_descriptor):
+                continue
+
+            a.execute()
+
+    def __repr__(self) -> str:
+        return f"Update: Module: {self.module_descriptor.name}"
+
+
+@dataclass
 class Dependency:
     module_file: Path
     objects: Set[Tuple[str, int]]  # name, id
 
 
+@dataclass
+class ModuleDescriptor:
+    name: str
+    path: Path
+    module: ModuleType
+    source: Source = field(init=False)
+
+    def __post_init__(self):
+        self.source = Source(self.path)
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+    def __repr__(self):
+        return self.name
+
+
 class Modules(dict):
-    user_modules: DefaultDict[str, List[ModuleType]]
+    user_modules: DefaultDict[str, List[ModuleDescriptor]]
 
     def __init__(
         self, reloader: "PartialReloader", old_dict: Dict[str, ModuleType]
@@ -957,7 +1022,11 @@ class Modules(dict):
         if self.reloader.root not in Path(value.__file__).parents:
             return
 
-        self.user_modules[value.__file__].append(value)
+        file = Path(value.__file__)
+        module = ModuleDescriptor(name = key,
+                              path=file,
+                              module=value)
+        self.user_modules[value.__file__].append(module)
 
     def __getitem__(self, key: str):
         return self._dict.__getitem__(key)
@@ -1056,11 +1125,11 @@ class TrickyTypes:
 class PartialReloader:
     root: Path
     logger: Logger
-    named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleType]] = field(init=False,
+    named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleDescriptor]] = field(init=False,
                                                                                 default_factory=lambda: defaultdict(set))
-    obj_to_modules: DefaultDict[int, Set[ModuleType]] = field(init=False,
+    obj_to_modules: DefaultDict[int, Set[ModuleDescriptor]] = field(init=False,
                                                               default_factory=lambda: defaultdict(set))
-    applied_actions: List[Action] = field(init=False, default_factory=list)
+    applied_actions: List[BaseAction] = field(init=False, default_factory=list)
     modules: Modules = field(init=False)
     tricky_types: TrickyTypes = field(init=False)
 
@@ -1070,106 +1139,62 @@ class PartialReloader:
 
         self.modules = Modules(self, sys.modules)
         sys.modules = self.modules
-        self.tricky_types = TrickyTypes(reloader=self)
-        self.tricky_types.start()
+        dependency_watcher.enable()
+        # self.tricky_types = TrickyTypes(reloader=self)
+        # self.tricky_types.start()
 
     def _reset(self) -> None:
         self.named_obj_to_modules = defaultdict(set)
         self.obj_to_modules = defaultdict(set)
         self.applied_actions = []
 
-    def get_new_module(self, old_module: Module) -> Module:
-        trace = sys.gettrace()
-        sys.settrace(None)
-        module_obj = misc.import_from_file(old_module.file, self.root)
-        sys.settrace(trace)
-
-        return Module(
-            module_obj,
-            reloader=self,
-            name=old_module.name,
-        )
-
-    def is_already_reloaded(self, module: ModuleType) -> bool:
+    def is_already_reloaded(self, module_descr: ModuleDescriptor) -> bool:
         module_update_actions = [
-            a for a in self.applied_actions if isinstance(a, Module.Update)
+            a for a in self.applied_actions if isinstance(a, UpdateModule)
         ]
         for a in module_update_actions:
-            if a.object.python_obj is module:
+            if a.module_descriptor is module_descr:
                 return True
 
-    def get_actions(self, module_file: Path) -> List[Action]:
-        actions = []
-        module_objs = self.modules.user_modules[str(module_file)]
-
-        for m in module_objs:
-            old_module = Module(python_obj=m, reloader=self, name=f"{m.__name__}")
-            action = Module.Update(reloader=self, object=old_module)
-            action.log()
-            self.applied_actions.append(action)
-
-            new_module = self.get_new_module(old_module)
-            actions.extend(old_module.get_actions_for_update(new_module))
-
-        actions.sort(key=lambda a: a.priority, reverse=True)
-        return actions
-
-    def _collect_dependencies(self, module: ModuleType) -> None:
-        for n, o in module.__dict__.items():
+    def _collect_dependencies(self, module: ModuleDescriptor) -> None:
+        for n, o in module.module.__dict__.items():
             if n.startswith("__") and n.endswith("__"):
                 continue
             self.named_obj_to_modules[(n, id(o))].add(module)
             self.obj_to_modules[id(o)].add(module)
 
     def _collect_all_dependencies(self) -> None:
-        for p, modules in copy(self.modules.user_modules).items():
+        for p, module_descr in copy(self.modules.user_modules).items():
             if self.root not in Path(p).parents:
                 continue
-            for m in list(modules):
+            for m in list(module_descr):
                 self._collect_dependencies(m)
+
+        import_order = dependency_watcher.import_order
 
         # remove owner modules (original definition place)
         for key, modules in self.named_obj_to_modules.copy().items():
             sorted_modules = sorted(
                 list(modules),
-                key=lambda m: list(self.modules.user_modules.keys()).index(m.__file__),
+                key=lambda m: import_order.index(str(m.path)) if str(m.path) in import_order else 0
             )
             if sorted_modules:
                 sorted_modules.pop(0)
             self.named_obj_to_modules[key] = set(sorted_modules)
 
-        for o_id, modules in self.obj_to_modules.copy().items():
-            sorted_modules = sorted(
-                list(modules),
-                key=lambda m: list(self.modules.user_modules.keys()).index(m.__file__),
-            )
-            if sorted_modules:
-                sorted_modules.pop(0)
-
-            self.obj_to_modules[o_id] = set(sorted_modules)
         pass
-
-    def _reload(self, module_file: Path) -> None:
-        actions = self.get_actions(module_file)
-        for a in actions:
-            a.execute()
 
     def reload(self, module_file: Path) -> None:
         """
         :return: True if succeded False i unable to reload
         """
         self._reset()
-
         self._collect_all_dependencies()
 
-        self._reload(module_file)
+        action = UpdateModule(reloader=self,
+                               module_file=module_file)
+        action.execute()
 
     def rollback(self) -> None:
-        rollback_actions = [
-            a.object.Rollback(reloader=self, action=a, object=a.object)
-            for a in reversed(self.applied_actions)
-        ]
-
-        for a in rollback_actions:
-            a.execute()
-
+        for a in reversed(self.applied_actions):
+            a.rollback()

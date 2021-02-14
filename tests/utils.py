@@ -1,10 +1,13 @@
 import builtins
 import sys
+import dill
+from copy import copy, deepcopy
+
 from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 import pytest
 
@@ -17,12 +20,15 @@ from smartreload import dependency_watcher
 
 def load_module(name: str) -> Any:
     module = builtins.__import__(name)
+    # TODO: this shouldn't be needed
+    # dependency_watcher.import_order.insert(0, module.__file__)
     return module
 
 
 class TestBase:
     @pytest.fixture(autouse=True)
     def setup(self, sandbox, modules_sandbox, env_sandbox):
+        dependency_watcher.reset()
         sys.path.insert(0, str(sandbox.parent))
 
         yield
@@ -40,6 +46,7 @@ class Module:
     source: str
     device: Optional[Any] = None
     path: Path = field(init=False)
+    initial_state: bytes = field(init=False)
 
     def __post_init__(self) -> None:
         self.path = Path(self.path_in).absolute()
@@ -52,6 +59,10 @@ class Module:
 
     def append(self, source: str) -> None:
         self._fixed_source += dedent(source)
+        self.write()
+
+    def prepend(self, source: str) -> None:
+        self._fixed_source = dedent(source) + self._fixed_source
         self.write()
 
     def write(self):
@@ -67,20 +78,34 @@ class Module:
     def delete(self, what: str) -> None:
         self.replace(what, "")
 
-    def load(self) -> None:
+    @property
+    def name(self) -> str:
         if self.path.stem != "__init__":
             name = self.path.stem
         else:
             name = self.path.parent.absolute().stem
 
-        dependency_watcher.enable()
-        self.device = load_module(name)
+        return name
+
+    def load(self) -> None:
+        self.device = load_module(self.name)
+        self.set_initial_state()
+
+    def set_initial_state(self) -> None:
+        self.initial_state = dill.dumps(self.device)
+
+    def load_from(self, module: "Module"):
+        self.device = getattr(module.device, self.name)
+        self.set_initial_state()
 
     def assert_obj_in(self, obj_name: str) -> None:
         assert obj_name in self.device.__dict__
 
     def assert_obj_not_in(self, obj_name: str) -> None:
         assert obj_name not in self.device.__dict__
+
+    def assert_not_changed(self) -> None:
+        assert dill.dumps(self.device) == self.initial_state
 
 
 @dataclass

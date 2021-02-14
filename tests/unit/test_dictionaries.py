@@ -18,8 +18,6 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
-        assert module.device.car_data["engine_power"] == 200
-
         module.replace('"engine_power": 200', '"engine_power": 250')
 
         reloader.reload(module)
@@ -29,7 +27,8 @@ class TestDictionaries(utils.TestBase):
             "Update: DictionaryItem: module.car_data.engine_power",
         )
 
-        assert module.device.car_data["engine_power"] == 250
+        reloader.rollback()
+        module.assert_not_changed()
 
     def test_change_key(self, sandbox):
         reloader = Reloader(sandbox)
@@ -38,16 +37,14 @@ class TestDictionaries(utils.TestBase):
             "module.py",
             """
         car_data = {
-        "engine_power": 200,
         "max_speed": 150,
-        "seats": 4
+        "seats": 4,
+        "engine_power": 200,
         }
         """,
         )
 
         module.load()
-        assert module.device.car_data["engine_power"] == 200
-
         module.replace("engine_power", "engine_force")
 
         reloader.reload(module)
@@ -61,6 +58,9 @@ class TestDictionaries(utils.TestBase):
         assert "engine_power" not in module.device.car_data
         assert module.device.car_data["engine_force"] == 200
 
+        reloader.rollback()
+        module.assert_not_changed()
+
     def test_change_key_and_value(self, sandbox):
         reloader = Reloader(sandbox)
 
@@ -68,16 +68,14 @@ class TestDictionaries(utils.TestBase):
             "module.py",
             """
         car_data = {
-        "engine_power": 200,
         "max_speed": 150,
-        "seats": 4
+        "seats": 4,
+        "engine_power": 200,
         }
         """,
         )
 
         module.load()
-        assert module.device.car_data["engine_power"] == 200
-
         module.replace('"engine_power": 200', '"engine_force": 250')
 
         reloader.reload(module)
@@ -91,6 +89,9 @@ class TestDictionaries(utils.TestBase):
         assert "engine_power" not in module.device.car_data
         assert module.device.car_data["engine_force"] == 250
 
+        reloader.rollback()
+        module.assert_not_changed()
+
     def test_add(self, sandbox):
         reloader = Reloader(sandbox)
 
@@ -102,8 +103,6 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
-        module.assert_obj_not_in("car_data")
-
         module.rewrite(
             """
             some_var = 1
@@ -123,6 +122,9 @@ class TestDictionaries(utils.TestBase):
 
         module.assert_obj_in("car_data")
 
+        reloader.rollback()
+        module.assert_not_changed()
+
     def test_delete(self, sandbox):
         reloader = Reloader(sandbox)
 
@@ -140,8 +142,6 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
-        module.assert_obj_in("car_data")
-
         module.rewrite(
             """
         some_var = 1
@@ -154,6 +154,8 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.assert_obj_not_in("car_data")
+        reloader.rollback()
+        module.assert_not_changed()
 
     def test_rename(self, sandbox):
         reloader = Reloader(sandbox)
@@ -172,9 +174,6 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
-
-        module.assert_obj_in("car_data")
-
         module.replace("car_data", "car_specs")
 
         reloader.reload(module)
@@ -186,3 +185,6 @@ class TestDictionaries(utils.TestBase):
 
         module.assert_obj_in("car_specs")
         module.assert_obj_not_in("car_data")
+
+        reloader.rollback()
+        module.assert_not_changed()

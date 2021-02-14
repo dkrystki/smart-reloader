@@ -215,11 +215,13 @@ def path_to_module_name(path: Path, package_root: Path) -> str:
 def import_from_file(
     path: Path, package_root: Path, module_name: Optional[str] = None
 ) -> Any:
+    from . import dependency_watcher
     if not module_name:
         module_name = path_to_module_name(path, package_root)
-    loader = importlib.machinery.SourceFileLoader(module_name, str(path))
+    loader = dependency_watcher.MyLoader(module_name, str(path))
     spec = importlib.util.spec_from_loader(module_name, loader)
     module = importlib.util.module_from_spec(spec)
+    dependency_watcher.clear_start_import_usages(str(path))
     loader.exec_module(module)
 
     return module
