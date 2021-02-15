@@ -506,11 +506,11 @@ class ContainerObj(Object):
 
     def _collect_children(self) -> None:
         for n, o in self.get_dict().items():
-            # break recursions
-            if any(o is p for p in self.get_parents_obj_flat() + [self.python_obj]):
+            if self._is_child_ignored(n, o):
                 continue
 
-            if self._is_child_ignored(n, o):
+            # break recursions
+            if any(o is p for p in self.get_parents_obj_flat() + [self.python_obj]):
                 continue
 
             obj_classes = self._python_obj_to_obj_classes(n, o)
@@ -609,6 +609,11 @@ class Class(ContainerObj):
             raise FullReloadNeeded()
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
+        full_name = f"{self.full_name}.{name}"
+
+        if full_name not in self.module.module_descriptor.source.flat_syntax:
+            return True
+
         return False
 
     def get_dict(self) -> "OrderedDict[str, Any]":
@@ -624,6 +629,7 @@ class Class(ContainerObj):
         # Don't add objects not defined in base class
         # if hasattr(obj, "__qualname__") and obj.__qualname__.split(".")[0] != self.python_obj.__name__:
         #     return {}
+
 
         # If already process means it's just a reference
         if id(obj) in self.reloader.obj_to_modules and not self.is_primitive(obj):
@@ -858,11 +864,41 @@ class Source:
     path: Path
     content: str = field(init=False)
     syntax: ast.AST = field(init=False)
+    flat_syntax: Dict[str, ast.AST] = field(init=False)
 
     def __post_init__(self) -> None:
         self.content = self.path.read_text()
         self.syntax = ast.parse(self.content, str(self.path))
+        self.flat_syntax = self._get_flat_source(self.syntax, parent="")
         pass
+
+    def fetch_source(self):
+        self.source = Source(self.path)
+
+    def _get_flat_source(self, syntax: ast.AST, parent: str) -> Dict[str, ast.AST]:
+        ret = {}
+
+        for child in ast.iter_child_nodes(syntax):
+            if type(child) is ast.FunctionDef:
+                continue
+
+            if hasattr(child, "name"):
+                namespaced_name = child.name if not parent else f"{parent}.{child.name}"
+                ret[namespaced_name] = type(child)
+                ret.update(self._get_flat_source(child, namespaced_name))
+            elif hasattr(child, "body"):
+                ret.update(self._get_flat_source(child, parent))
+
+            if type(child) is ast.Assign:
+                for t in child.targets:
+                    if type(t) is ast.Name:
+                        namespaced_name = t.id if not parent else f"{parent}.{t.id}"
+                        ret[namespaced_name] = type(child.value)
+                    elif type(t) is ast.Attribute:
+                        namespaced_name = f"{t.value}.{t.attr}" if not parent else f"{parent}.{t.value}.{t.attr}"
+                        ret[namespaced_name] = type(child.value)
+
+        return ret
 
 
 @dataclass
@@ -941,6 +977,7 @@ class UpdateModule(BaseAction):
 
     def __post_init__(self) -> None:
         self.module_descriptor = sys.modules.user_modules[str(self.module_file)][0]
+        self.old_source = self.module_descriptor.source
 
     def execute(self) -> None:
         self.pre_execute()
@@ -976,6 +1013,11 @@ class UpdateModule(BaseAction):
 
             a.execute()
 
+        self.module_descriptor.fetch_source()
+
+    def rollback(self) -> None:
+        self.module_descriptor.source = self.old_source
+
     def __repr__(self) -> str:
         return f"Update: Module: {self.module_descriptor.name}"
 
@@ -994,6 +1036,9 @@ class ModuleDescriptor:
     source: Source = field(init=False)
 
     def __post_init__(self):
+        self.fetch_source()
+
+    def fetch_source(self) -> None:
         self.source = Source(self.path)
 
     def __hash__(self) -> int:

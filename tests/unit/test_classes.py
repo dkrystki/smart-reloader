@@ -895,30 +895,30 @@ class TestClasses(utils.TestBase):
         init = Module(
             "__init__.py",
             """
-                      from . import carwash
-                      from . import car
-                      """,
+        from . import carwash
+        from . import car
+        """,
         )
 
         carwash = Module(
             "carwash.py",
             """
-                         class CarNameType:
-                            a = 1
-                         
-                         class Carwash:
-                             name_type = CarNameType
-                         """,
+        class CarNameType:
+        a = 1
+        
+        class Carwash:
+        name_type = CarNameType
+        """,
         )
 
         car = Module(
             "car.py",
             """
-                     from .carwash import Carwash
-     
-                     class SuperCarwash(Carwash): 
-                         pass
-                     """,
+        from .carwash import Carwash
+        
+        class SuperCarwash(Carwash): 
+        pass
+        """,
         )
 
         init.load()
@@ -928,14 +928,14 @@ class TestClasses(utils.TestBase):
 
         car.rewrite(
             """
-            from .carwash import Carwash
-            
-            class NameType:
-                pass
-            
-            class SuperCarwash(Carwash): 
-                name_type = NameType 
-            """
+        from .carwash import Carwash
+        
+        class NameType:
+            pass
+        
+        class SuperCarwash(Carwash): 
+            name_type = NameType 
+        """
         )
 
         reloader.reload(car)
@@ -950,3 +950,42 @@ class TestClasses(utils.TestBase):
         init.assert_not_changed()
         carwash.assert_not_changed()
         car.assert_not_changed()
+
+    def test_only_reloads_user_defined(self, sandbox):
+        reloader = Reloader(sandbox.parent)
+
+        init = Module(
+            "__init__.py",
+            """
+        from . import cupcake
+        """,
+        )
+
+        cupcake_base = Module(
+            "cupcake_base.py",
+            """
+        class CupcakeBase:
+            size = 10
+        """,
+        )
+
+        cupcake = Module(
+            "cupcake.py",
+            """
+        from .cupcake_base import CupcakeBase
+        
+        class Cupcake(CupcakeBase): 
+            colour = "red"
+        """
+        )
+
+        init.load()
+
+        cupcake_base.load_from(init)
+        cupcake.load_from(init)
+
+        cupcake.device.Cupcake.size = 15
+
+        reloader.reload(cupcake)
+
+        reloader.assert_actions('Update: Module: sandbox.cupcake')
