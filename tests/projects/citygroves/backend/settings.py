@@ -173,5 +173,7 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"]
 }
 
-SOME_VAR = 12
-SOME_VAR_2 = 12
+SOME_VAR = 14
+SOME_VAR_2 = 133
+SOME_VAR_3 = 135
+

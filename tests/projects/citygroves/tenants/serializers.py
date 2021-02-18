@@ -213,3 +213,4 @@ class ApplicationSerializer(serializers.ModelSerializer):
             application.referrers.add(referrer)
 
         return application
+

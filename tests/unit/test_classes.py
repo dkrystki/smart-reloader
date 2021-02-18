@@ -904,10 +904,10 @@ class TestClasses(utils.TestBase):
             "carwash.py",
             """
         class CarNameType:
-        a = 1
+            a = 1
         
         class Carwash:
-        name_type = CarNameType
+            name_type = CarNameType
         """,
         )
 
@@ -917,7 +917,7 @@ class TestClasses(utils.TestBase):
         from .carwash import Carwash
         
         class SuperCarwash(Carwash): 
-        pass
+            pass
         """,
         )
 
@@ -989,3 +989,65 @@ class TestClasses(utils.TestBase):
         reloader.reload(cupcake)
 
         reloader.assert_actions('Update: Module: sandbox.cupcake')
+
+    def test_method_with_list_comprehensions_twice(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        class Cupcake:
+            def eat(self):
+                a = [i for i in range(10)]
+    
+                return 10
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        class Cupcake:
+            def eat(self):
+                a = [i for i in range(10)]
+    
+                return 12
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions(
+            'Update: Module: module', 'Update: Method: module.Cupcake.eat',
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions(
+            'Update: Module: module',
+        )
+
+    def test_method_not_changed_should_not_reload(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        class Cupcake:
+            def eat(self):
+                return 10
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        class Cupcake:
+            def eat(self):
+                return 10
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module')
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module')

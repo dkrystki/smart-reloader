@@ -337,8 +337,8 @@ class TestModules(utils.TestBase):
             "slave_module.py",
             """
         tesla_car_1 = "Model S"
+        tesla_car_2 = "Model X"
         tesla_car_3 = "Model 3"
-        tesla_car_2 = "Model 3"
         """,
         )
 

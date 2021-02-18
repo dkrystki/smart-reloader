@@ -14,7 +14,7 @@ a = 123453
 b = 1234
 c = 123
 d = 33333
-e = 3333388
+e = 33333882
 
 
 def hihi(haha):
@@ -74,8 +74,7 @@ class TenantsViewset(
     serializer_class = serializers.TenantSerializer
 
     def get_queryset(self):
-        b = 123
-        a = 912111211
+        b = 1281122112357812311
         return super().get_queryset()
 
 
@@ -105,6 +104,8 @@ class EntryNoticeViewset(
             return response
         else:
             return super().retrieve(self)
+
+        a = 131
 
 
 class EntryNoticeSend(generics.GenericAPIView):

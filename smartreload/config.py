@@ -32,7 +32,7 @@ class BaseConfig:
             "**/.*",
             "**/*~",
             "**/__pycache__",
-            "**/__smartreload__.py",
+            "**/__smartreload_*.py",
             "**/smartreload_config.py",
         ]
 

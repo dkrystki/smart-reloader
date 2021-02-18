@@ -227,6 +227,12 @@ class Object:
         )
 
     @property
+    def full_name_without_module_name(self) -> str:
+        ret = self.full_name[len(self.module.full_name):]
+        ret = ret.lstrip(".")
+        return ret
+
+    @property
     def type(self) -> str:
         try:
             return f"{self.python_obj.__module__}.{self.python_obj.__class__.__name__}"
@@ -397,32 +403,46 @@ class Function(FinalObj):
         else:
             return []
 
-    def __eq__(self, other: "Function") -> bool:
+    def compare_codes(self, left: CodeType, right: CodeType) -> bool:
         compare_fields = [
             "co_argcount",
             "co_cellvars",
             "co_code",
-            "co_consts",
-            "co_flags",
             "co_freevars",
             "co_lnotab",
             "co_name",
             "co_names",
             "co_nlocals",
-            "co_stacksize",
             "co_varnames",
         ]
-
         for f in compare_fields:
-            if getattr(self.get_func(self.python_obj).__code__, f) != getattr(
-                self.get_func(other.python_obj).__code__, f
-            ):
+            if getattr(left, f) != getattr(right, f):
+                return False
+
+        if len(left.co_consts) != len(right.co_consts):
+            return False
+
+        for left_f, right_f in zip(left.co_consts, right.co_consts):
+            if type(left_f) is not type(right_f):
+                return False
+
+            if inspect.iscode(left_f):
+                if not self.compare_codes(left_f, right_f):
+                    return False
+            elif left_f != right_f:
                 return False
 
         return True
 
+    def __eq__(self, other: "Function") -> bool:
+        left = self.get_func(self.python_obj).__code__
+        right = self.get_func(other.python_obj).__code__
+
+        ret = self.compare_codes(left, right)
+        return ret
+
     def __ne__(self, other: "Function") -> bool:
-        return not (Function.__eq__(self, other))
+        return not (self.__class__.__eq__(self, other))
 
     @property
     def source(self) -> str:
@@ -462,11 +482,17 @@ class PropertyGetter(Function):
     def get_func(cls, obj: Any) -> Any:
         return obj.fget
 
+    def __eq__(self, other: "Function") -> bool:
+        return super().__eq__(other)
+
 
 class PropertySetter(Function):
     @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj.fset
+
+    def __eq__(self, other: "Function") -> bool:
+        return super().__eq__(other)
 
 
 @dataclass
@@ -609,7 +635,7 @@ class Class(ContainerObj):
             raise FullReloadNeeded()
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
-        full_name = f"{self.full_name}.{name}"
+        full_name = f"{self.full_name_without_module_name}.{name}"
 
         if full_name not in self.module.module_descriptor.source.flat_syntax:
             return True
@@ -672,9 +698,8 @@ class Method(Function):
 
         def execute(self) -> None:
             self.pre_execute()
-            fun = self.object.get_fixed_fun(self.object.python_obj, self.parent)
-            fun.__code__ = self.object.get_code_with_source_file_info(fun, self.object)
-            setattr(self.parent.python_obj, self.object.name, fun)
+            self.object.python_obj = self.object.get_fixed_code(self.object, self.parent)
+            setattr(self.parent.python_obj, self.object.name, self.object.python_obj)
 
     class Update(Function.Update):
         object: "Method"
@@ -684,55 +709,81 @@ class Method(Function):
         def execute(self) -> None:
             self.pre_execute()
             self.old_code = self.object.python_obj.__code__
-            fun = self.object.get_fixed_fun(self.new_object.python_obj, self.parent)
-            code = self.object.get_code_with_source_file_info(fun, self.new_object)
-
-            self.object.python_obj.__code__ = code
+            self.object.python_obj.__code__ = self.new_object.get_fixed_code(self.object, self.parent).__code__
 
     @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj
 
-    def get_fixed_fun(self, fun: Callable, parent_class: Class) -> Callable:
-        source = dedent(inspect.getsource(fun))
-        source = re.sub(r"super\(\s*\)", f"super({parent_class.name}, self)", source)
+    def get_fixed_code(
+        self, original_method: "Method", parent: Optional["ContainerObj"] = None
+    ) -> Callable:
+        source = self.get_source()
+        source = re.sub(r"super\(\s*\)", f"super({self.parent.name}, self)", source)
         source = indent(source, "    " * 4)
 
+        if not parent:
+            parent = self.parent
+
+        __class__str = f"__class__ = {parent.name}" if original_method.python_obj.__code__.co_freevars else ""
         builder = dedent(
             f"""
             def builder():
-                __class__ = {parent_class.name}\n{source}
+                {__class__str}\n{source}
                 return {self.name}
             """
         )
 
-        context = dict(parent_class.module.python_obj.__dict__)
-        exec(builder, context)
+        context = dict(parent.module.python_obj.__dict__)
+        code = compile(builder, str(self.module.file), 'exec')
+        exec(code, context)
 
         fixed_fun = context["builder"]()
+
+        fixed_consts = []
+
+        for c in fixed_fun.__code__.co_consts:
+            if isinstance(c, str):
+                fixed_consts.append(c.replace("builder.<locals>", self.parent.name))
+            else:
+                fixed_consts.append(c)
+
+        fixed_consts = tuple(fixed_consts)
+
+        code = CodeType(
+            original_method.python_obj.__code__.co_argcount,  # integer
+            original_method.python_obj.__code__.co_kwonlyargcount,  # integer
+            original_method.python_obj.__code__.co_nlocals,  # integer
+            original_method.python_obj.__code__.co_stacksize,  # integer
+            original_method.python_obj.__code__.co_flags,  # integer
+            fixed_fun.__code__.co_code,  # bytes
+            fixed_consts,  # tuple
+            fixed_fun.__code__.co_names,  # tuple
+            original_method.python_obj.__code__.co_varnames,  # tuple
+            original_method.python_obj.__code__.co_filename,  # string
+            original_method.python_obj.__code__.co_name,  # string
+            self.python_obj.__code__.co_firstlineno,  # integer
+            self.python_obj.__code__.co_lnotab,  # bytes
+            original_method.python_obj.__code__.co_freevars,  # tuple
+            original_method.python_obj.__code__.co_cellvars,  # tuple
+        )
+        fixed_fun.__code__ = code
         return fixed_fun
 
-    def get_code_with_source_file_info(
-        self, fun: Any, new_object: "Method"
-    ) -> CodeType:
-        code = CodeType(
-            fun.__code__.co_argcount,  # integer
-            fun.__code__.co_kwonlyargcount,  # integer
-            fun.__code__.co_nlocals,  # integer
-            fun.__code__.co_stacksize,  # integer
-            fun.__code__.co_flags,  # integer
-            fun.__code__.co_code,  # bytes
-            fun.__code__.co_consts,  # tuple
-            fun.__code__.co_names,  # tuple
-            fun.__code__.co_varnames,  # tuple
-            self.python_obj.__code__.co_filename,  # string
-            fun.__code__.co_name,  # string
-            new_object.python_obj.__code__.co_firstlineno,  # integer
-            new_object.python_obj.__code__.co_lnotab,  # bytes
-            self.python_obj.__code__.co_freevars,  # tuple
-            fun.__code__.co_cellvars,  # tuple
-        )
-        return code
+    def get_source(self) -> str:
+        source_lines = self.module.module_descriptor.source.content.splitlines(keepends=True)
+        lnum = self.python_obj.__code__.co_firstlineno - 1
+
+        ret = inspect.getblock(source_lines[lnum:])
+        ret = "".join(ret)
+
+        ret = dedent(ret)
+        return ret
+
+    def __eq__(self, other: "Method") -> bool:
+        left = copy(self)
+        ret = left.get_source() == other.get_source()
+        return ret
 
 
 @dataclass
@@ -869,28 +920,28 @@ class Source:
     def __post_init__(self) -> None:
         self.content = self.path.read_text()
         self.syntax = ast.parse(self.content, str(self.path))
-        self.flat_syntax = self._get_flat_source(self.syntax, parent="")
+        self.flat_syntax = self._get_flat_syntax(self.syntax, parent="")
         pass
 
     def fetch_source(self):
         self.source = Source(self.path)
 
-    def _get_flat_source(self, syntax: ast.AST, parent: str) -> Dict[str, ast.AST]:
+    def _get_flat_syntax(self, syntax: ast.AST, parent: str) -> Dict[str, ast.AST]:
         ret = {}
 
         for child in ast.iter_child_nodes(syntax):
-            if type(child) is ast.FunctionDef:
-                continue
-
             if hasattr(child, "name"):
                 namespaced_name = child.name if not parent else f"{parent}.{child.name}"
                 ret[namespaced_name] = type(child)
-                ret.update(self._get_flat_source(child, namespaced_name))
-            elif hasattr(child, "body"):
-                ret.update(self._get_flat_source(child, parent))
+                ret.update(self._get_flat_syntax(child, namespaced_name))
 
-            if type(child) is ast.Assign:
-                for t in child.targets:
+            if hasattr(child, "body") and type(child) is not ast.FunctionDef:
+                ret.update(self._get_flat_syntax(child, parent))
+
+            if type(child) in [ast.Assign, ast.AnnAssign]:
+                targets = child.targets if hasattr(child, "targets") else [child.target]
+
+                for t in targets:
                     if type(t) is ast.Name:
                         namespaced_name = t.id if not parent else f"{parent}.{t.id}"
                         ret[namespaced_name] = type(child.value)
