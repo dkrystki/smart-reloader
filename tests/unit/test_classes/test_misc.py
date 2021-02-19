@@ -1,3 +1,10 @@
+import ctypes
+import gc
+import sys
+from time import sleep
+import timeit
+import inspect
+
 from pytest import raises
 
 from smartreload import FullReloadNeeded
@@ -779,6 +786,35 @@ class TestClasses(utils.TestBase):
         reloader.rollback()
         module.assert_not_changed()
 
+    def test_edit_method_with_inheritance(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+            class CarwashBase:
+                def fun(self):
+                    return 2
+            
+            class Carwash(CarwashBase):
+                pass
+            """,
+        )
+
+        module.load()
+
+        module.replace("return 2", "return 10")
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: module', 'Update: Method: module.CarwashBase.fun')
+
+        assert module.device.CarwashBase().fun() == 10
+        assert module.device.Carwash().fun() == 10
+
+        reloader.rollback()
+        module.assert_not_changed()
+
     def test_add_nested(self, sandbox):
         reloader = Reloader(sandbox)
 
@@ -1051,3 +1087,217 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions('Update: Module: module')
+
+    def test_add_method_closure(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+            class Cupcake:
+                def eat(self):
+                    return "Eating"
+            """,
+        )
+
+        module.load()
+
+        module.rewrite(
+            """
+            class Cupcake:
+                def eat(self):
+                    def sweet():
+                        return "very sweet"
+                    return f"Eating {sweet()} cupcake"
+            """
+        )
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: module', 'Update: Method: module.Cupcake.eat')
+
+        assert module.device.Cupcake().eat() == "Eating very sweet cupcake"
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+    def test_edit_method_closure(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+            class Cupcake:
+                def eat(self):
+                    def sweet():
+                        return "very sweet"
+                    return f"Eating {sweet()} cupcake"
+            """,
+        )
+
+        module.load()
+
+        module.rewrite(
+            """
+            class Cupcake:
+                def eat(self):
+                    def sweet():
+                        return "super sweet"
+                    return f"Eating {sweet()} cupcake"
+            """
+        )
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update: Module: module', 'Update: Method: module.Cupcake.eat')
+
+        assert module.device.Cupcake().eat() == "Eating super sweet cupcake"
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+    def test_add_lambda(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        class Cake:
+            pass
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        class Cake:
+            fun = lambda x: x * 5
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Add: Method: module.Cake.fun')
+        assert module.device.Cake.fun(5) == 25
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+    def test_edit_lambda(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        class Cake:
+            fun = lambda x: x * 3
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        class Cake:
+            fun = lambda x: x * 5
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Update: Method: module.Cake.fun')
+        assert module.device.Cake.fun(5) == 25
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+        assert module.device.Cake.fun(5) == 15
+
+    def test_add_staticmethod(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        class Cake:
+            pass
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        class Cake:
+            @staticmethod
+            def eat():
+                return "Eating"
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Add: StaticMethod: module.Cake.eat')
+        assert module.device.Cake.eat() == "Eating"
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+    def test_edit_staticmethod(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        class Cake:
+            @staticmethod
+            def eat():
+                return "Eating"
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        class Cake:
+            @staticmethod
+            def eat():
+                return "Eating fast"
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Update: StaticMethod: module.Cake.eat')
+        assert module.device.Cake.eat() == "Eating fast"
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+        assert module.device.Cake.eat() == "Eating"
+
+    def test_edit_staticmethod(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        class Cake:
+            @staticmethod
+            def eat():
+                return "Eating"
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        class Cake:
+            @staticmethod
+            def eat():
+                return "Eating fast"
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Update: StaticMethod: module.Cake.eat')
+        assert module.device.Cake.eat() == "Eating fast"
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+        assert module.device.Cake.eat() == "Eating"

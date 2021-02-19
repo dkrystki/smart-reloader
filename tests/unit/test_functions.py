@@ -306,5 +306,112 @@ class TestFunctions(utils.TestBase):
         reloader.rollback()
         module.assert_not_changed()
 
+    def test_add_closure(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        def fun():
+            return 10
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        def fun():
+            def get_number():
+                return 5
+            return 10 + get_number()
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Update: Function: module.fun')
+        assert module.device.fun() == 15
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+    def test_edit_closure(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        def fun():
+            def get_number():
+                return 5
+            return 10 + get_number()
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        def fun():
+            def get_number():
+                return 15
+            return 15 + get_number()
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Update: Function: module.fun')
+        assert module.device.fun() == 30
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+    def test_add_lambda(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        fun = lambda x: 10 + x
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Add: Function: module.fun')
+        assert module.device.fun(5) == 15
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+    def test_edit_lambda(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        fun = lambda x: 10 + x
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        fun = lambda x: x * 10
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Update: Function: module.fun')
+        assert module.device.fun(5) == 50
+
+        reloader.rollback()
+        module.assert_not_changed()
+
+        assert module.device.fun(5) == 15
+
     def test_moves_functions_first_lines(self):
         assert False

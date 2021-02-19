@@ -1,6 +1,8 @@
 import ast
+import ctypes
 import inspect
 import os
+import gc
 import ast
 import re
 import sys
@@ -13,7 +15,7 @@ from dataclasses import dataclass, field
 from logging import Logger
 from pathlib import Path
 from textwrap import dedent, indent
-from types import CodeType, ModuleType
+from types import CodeType, ModuleType, FrameType, FunctionType
 from typing import (
     Any,
     Callable,
@@ -69,7 +71,7 @@ class BaseAction:
     def rollback(self) -> None:
         pass
 
-    def __eq__(self, other: "BaseAction") -> bool:
+    def equal(self, other: "BaseAction") -> bool:
         raise NotImplementedError()
 
     def execute(self) -> None:
@@ -82,7 +84,7 @@ class BaseAction:
 
 @dataclass
 class Action(BaseAction):
-    object: "Object"
+    obj: "Object"
 
 
 @dataclass
@@ -90,54 +92,83 @@ class Object:
     @dataclass
     class Add(Action):
         parent: "ContainerObj"
-        object: "Object"
+        obj: "Object"
 
         def __repr__(self) -> str:
-            return f"Add: {repr(self.object)}"
+            return f"Add: {repr(self.obj)}"
 
         def execute(self) -> None:
             self.pre_execute()
-            self.parent.set_attr(self.object.name, self.object.python_obj)
+            self.parent.set_attr(self.obj.name, self.obj.python_obj)
 
         def rollback(self) -> None:
             super().rollback()
-            self.parent.del_attr(self.object.name)
+            self.parent.del_attr(self.obj.name)
 
     @dataclass
     class Update(Action):
         parent: Optional["ContainerObj"]
-        object: "Object"
-        new_object: Optional["Object"]
-        difference: dict = field(init=False)
+        obj: "Object"
+        new_obj: Optional["Object"]
 
         def __repr__(self) -> str:
-            return f"Update: {repr(self.object)}"
+            return f"Update: {repr(self.obj)}"
 
         def execute(self) -> None:
             self.pre_execute()
-            python_obj = self.new_object.get_fixed_reference(self.object.module)
+            python_obj = self.new_obj.get_fixed_reference(self.obj.module)
 
-            self.object.parent.set_attr(self.object.name, python_obj)
+            self.obj.parent.set_attr(self.obj.name, python_obj)
 
         def rollback(self) -> None:
             super().rollback()
-            self.object.parent.set_attr(self.object.name, self.object.python_obj)
+            self.obj.parent.set_attr(self.obj.name, self.obj.python_obj)
+
+    @dataclass
+    class DeepUpdate(Action):
+        parent: Optional["ContainerObj"]
+        obj: "Object"
+        new_obj: Optional["Object"]
+        referrers: List[object] = field(init=False)
+
+        def __post_init__(self):
+            pass
+
+        def get_referrers(self, obj: object) -> List[object]:
+            ret = []
+            referres = gc.get_referrers(obj)
+            for r in referres:
+                if r is self.obj.__dict__ or r is locals():
+                    continue
+
+                ret.append(r)
+            return ret
+
+        def __repr__(self) -> str:
+            return f"DeepUpdate: {repr(self.obj)}"
+
+        def execute(self) -> None:
+            self.pre_execute()
+
+        def rollback(self) -> None:
+            super().rollback()
+
 
     @dataclass
     class Delete(Action):
         parent: Optional["ContainerObj"]
-        object: "Object"
+        obj: "Object"
 
         def __repr__(self) -> str:
-            return f"Delete: {repr(self.object)}"
+            return f"Delete: {repr(self.obj)}"
 
         def execute(self) -> None:
             self.pre_execute()
-            self.parent.del_attr(self.object.name)
+            self.parent.del_attr(self.obj.name)
 
         def rollback(self) -> None:
             super().rollback()
-            self.parent.set_attr(self.object.name, self.object.python_obj)
+            self.parent.set_attr(self.obj.name, self.obj.python_obj)
 
     python_obj: Any
     reloader: "PartialReloader"
@@ -153,16 +184,16 @@ class Object:
         ret = self.full_name.split(".")[-1]
         return ret
 
-    def get_actions_for_update(self, new_object: "Object") -> List["BaseAction"]:
-        if self.safe_compare(new_object):
+    def get_actions_for_update(self, new_obj: "Object") -> List["BaseAction"]:
+        if self.safe_compare(new_obj):
             return []
 
         ret = [
             self.Update(
                 reloader=self.reloader,
                 parent=self.parent,
-                object=self,
-                new_object=new_object,
+                obj=self,
+                new_obj=new_obj,
             )
         ]
 
@@ -197,7 +228,7 @@ class Object:
     def get_actions_for_add(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["BaseAction"]:
-        ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
+        ret = [self.Add(reloader=reloader, parent=parent, obj=obj)]
         if self.is_in_all():
             ret.extend(self.get_star_import_updates_actions())
         return ret
@@ -212,7 +243,7 @@ class Object:
     def get_actions_for_delete(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["BaseAction"]:
-        ret = [self.Delete(reloader=reloader, parent=parent, object=obj)]
+        ret = [self.Delete(reloader=reloader, parent=parent, obj=obj)]
         ret.extend(self.get_actions_for_dependent_modules())
         if self.is_in_all():
             ret.extend(self.get_star_import_updates_actions())
@@ -319,10 +350,10 @@ class Object:
         )
         return ret
 
-    def __eq__(self, other: "Object") -> bool:
+    def equal(self, other: "Object") -> bool:
         return self.python_obj == other.python_obj
 
-    def __ne__(self, other: "Object") -> bool:
+    def not_equal(self, other: "Object") -> bool:
         return self.python_obj != other.python_obj
 
     def __repr__(self) -> str:
@@ -372,32 +403,113 @@ class Reference(FinalObj):
 @dataclass
 class Function(FinalObj):
     class Update(FinalObj.Update):
-        object: "Function"
-        new_object: Optional["Function"]
+        obj: "Function"
+        new_obj: Optional["Function"]
         old_code: CodeType = field(init=False)
 
         def execute(self) -> None:
             self.pre_execute()
-            self.old_code = self.object.get_func(
-                self.object.python_obj
+            self.old_code = self.obj.get_func(
+                self.obj.python_obj
             ).__code__
 
-            self.object.get_func(
-                self.object.python_obj
-            ).__code__ = self.new_object.get_func(self.new_object.python_obj).__code__
+            self.obj.get_func(
+                self.obj.python_obj
+            ).__code__ = self.new_obj.get_func(self.new_obj.python_obj).__code__
 
         def rollback(self) -> None:
             super().rollback()
-            self.object.get_func(self.object.python_obj).__code__ = self.old_code
+            self.obj.get_func(self.obj.python_obj).__code__ = self.old_code
 
-    def get_actions_for_update(self, new_object: "Function") -> List["BaseAction"]:
-        if self != new_object:
+    @dataclass
+    class DeepUpdate(FinalObj.DeepUpdate):
+        parent: Optional["ContainerObj"]
+        obj: "Object"
+        new_obj: Optional["Object"]
+        referrers: List[object] = field(init=False)
+
+        @dataclass
+        class RollabackOperation:
+            dict_obj: Any
+            dictionary: dict
+            key: str
+            value: object
+            owner: "DeepUpdate"
+
+            def execute(self) -> None:
+                self.dictionary[self.key] = self.value
+                if inspect.isframe(self.dict_obj):
+                    self.owner.apply_changes_to_frame(self.dict_obj)
+
+        rollback_operations: List[RollabackOperation] = field(init=False, default_factory=list)
+
+        def replace_obj(self, what: object, to_what: object):
+            referrers = self.get_referrers(what)
+
+            for r in referrers:
+                if r is locals():
+                    continue
+
+                if isinstance(r, dict):
+                    dictionary = r
+
+                elif inspect.isframe(r):
+                    if r.f_code.co_filename == __file__:
+                        continue
+                    dictionary = r.f_locals
+                else:
+                    continue
+
+                for k, v in dictionary.items():
+                    if hasattr(v, "__func__") and v.__func__ is what:
+                        dictionary[k] = to_what
+                        self.rollback_operations.append(self.RollabackOperation(r, dictionary, k, v, self))
+
+                    if v is what:
+                        dictionary[k] = to_what
+                        self.rollback_operations.append(self.RollabackOperation(r, dictionary, k, v, self))
+
+                # update frame
+                if inspect.isframe(r):
+                    self.apply_changes_to_frame(r)
+
+        def apply_changes_to_frame(self, frame_obj: FrameType):
+            if inspect.isframe(frame_obj):
+                ctypes.pythonapi.PyFrame_LocalsToFast(
+                    ctypes.py_object(frame_obj),
+                    ctypes.c_int(1))
+
+        def execute(self) -> None:
+            self.pre_execute()
+
+            self.replace_obj(self.obj.python_obj, self.new_obj.python_obj)
+            if hasattr(self.obj.python_obj, "__func__"):
+                self.replace_obj(self.obj.python_obj.__func__, self.new_obj.python_obj)
+
+        def rollback(self) -> None:
+            super().rollback()
+
+            for o in self.rollback_operations:
+                o.execute()
+
+    def get_actions_for_update(self, new_obj: "Function") -> List["BaseAction"]:
+        if type(self.python_obj) != type(new_obj.python_obj) or self.python_obj.__closure__ or new_obj.python_obj.__closure__:
+            return [
+                self.DeepUpdate(
+                    reloader=self.reloader,
+                    parent=self.parent,
+                    obj=self,
+                    new_obj=new_obj,
+                )
+            ]
+
+        if self.not_equal(new_obj):
             return [
                 self.Update(
                     reloader=self.reloader,
                     parent=self.parent,
-                    object=self,
-                    new_object=new_object,
+                    obj=self,
+                    new_obj=new_obj,
                 )
             ]
         else:
@@ -434,32 +546,51 @@ class Function(FinalObj):
 
         return True
 
-    def __eq__(self, other: "Function") -> bool:
-        left = self.get_func(self.python_obj).__code__
-        right = self.get_func(other.python_obj).__code__
-
-        ret = self.compare_codes(left, right)
+    def equal(self, other: "Function") -> bool:
+        ret = self.source == other.source
         return ret
 
-    def __ne__(self, other: "Function") -> bool:
-        return not (self.__class__.__eq__(self, other))
+    def not_equal(self, other: "Function") -> bool:
+        return not (self.__class__.equal(self, other))
+
+    def _extract_wrapped(self, decorated: FunctionType):
+        closure = (c.cell_contents for c in decorated.__closure__)
+        ret = next((c for c in closure if isinstance(c, FunctionType)), None)
+        return ret
 
     @property
     def source(self) -> str:
-        try:
-            ret = inspect.getsource(self.get_func(self.python_obj))
-            ret = dedent(ret)
-        except (TypeError, OSError):
-            return ""
+        func = self.get_func(self.python_obj)
+        if func.__closure__:
+            target = self._extract_wrapped(func) or func
+        else:
+            target = func
 
-        if (
-            isinstance(self.parent, Dictionary)
-            and self.python_obj.__name__ == "<lambda>"
-        ):
-            ret = ret[ret.find(":") + 1 :]
-            ret = dedent(ret)
+        source_lines = self.module.module_descriptor.source.content.splitlines(keepends=True)
+        lnum = target.__code__.co_firstlineno - 1
 
+        ret = inspect.getblock(source_lines[lnum:])
+        ret = "".join(ret)
+
+        ret = dedent(ret)
         return ret
+
+    # @property
+    # def source(self) -> str:
+    #     try:
+    #         ret = inspect.getsource(self.get_func(self.python_obj))
+    #         ret = dedent(ret)
+    #     except (TypeError, OSError):
+    #         return ""
+    #
+    #     if (
+    #         isinstance(self.parent, Dictionary)
+    #         and self.python_obj.__name__ == "<lambda>"
+    #     ):
+    #         ret = ret[ret.find(":") + 1 :]
+    #         ret = dedent(ret)
+    #
+    #     return ret
 
     def is_global(self) -> bool:
         ret = self.parent == self.module
@@ -482,8 +613,8 @@ class PropertyGetter(Function):
     def get_func(cls, obj: Any) -> Any:
         return obj.fget
 
-    def __eq__(self, other: "Function") -> bool:
-        return super().__eq__(other)
+    def equal(self, other: "Function") -> bool:
+        return super().equal(other)
 
 
 class PropertySetter(Function):
@@ -491,8 +622,8 @@ class PropertySetter(Function):
     def get_func(cls, obj: Any) -> Any:
         return obj.fset
 
-    def __eq__(self, other: "Function") -> bool:
-        return super().__eq__(other)
+    def equal(self, other: "Function") -> bool:
+        return super().equal(other)
 
 
 @dataclass
@@ -551,27 +682,28 @@ class ContainerObj(Object):
                     o, parent=self, name=n, reloader=self.reloader, module=self.module
                 )
                 self.children[n] = obj
+        pass
 
     @property
     def source(self) -> str:
         ret = inspect.getsource(self.python_obj)
         return ret
 
-    def get_actions_for_update(self, new_object: Object) -> List[BaseAction]:
+    def get_actions_for_update(self, new_obj: Object) -> List[BaseAction]:
         ret = []
 
         a = self.children
-        b = new_object.children
-        new_objects_names = b.keys() - a.keys()
-        new_objects = {n: b[n] for n in new_objects_names}
-        for o in new_objects.values():
+        b = new_obj.children
+        new_objs_names = b.keys() - a.keys()
+        new_objs = {n: b[n] for n in new_objs_names}
+        for o in new_objs.values():
             ret.extend(
                 o.get_actions_for_add(reloader=self.reloader, parent=self, obj=o)
             )
 
-        deleted_objects_names = a.keys() - b.keys()
-        deleted_objects = {n: a[n] for n in deleted_objects_names}
-        for o in deleted_objects.values():
+        deleted_objs_names = a.keys() - b.keys()
+        deleted_objs = {n: a[n] for n in deleted_objs_names}
+        for o in deleted_objs.values():
             parent = o.parent
             ret.extend(
                 o.get_actions_for_delete(reloader=self.reloader, parent=parent, obj=o)
@@ -585,7 +717,7 @@ class ContainerObj(Object):
             if o is self:
                 continue
 
-            ret.extend(o.get_actions_for_update(new_object=b[n]))
+            ret.extend(o.get_actions_for_update(new_obj=b[n]))
 
         ret.sort(key=lambda a: a.priority, reverse=True)
 
@@ -612,25 +744,25 @@ class Class(ContainerObj):
     @dataclass
     class Add(ContainerObj.Add):
         def __repr__(self) -> str:
-            return f"Add: {repr(self.object)}"
+            return f"Add: {repr(self.obj)}"
 
         def execute(self) -> None:
             self.pre_execute()
-            source = dedent(self.object.source)
+            source = dedent(self.obj.source)
 
             if isinstance(self.parent, Class):
                 context = dict(self.parent.python_obj.__dict__)
                 exec(source, self.parent.module.python_obj.__dict__, context)
-                self.parent.set_attr(self.object.name, context[self.object.name])
+                self.parent.set_attr(self.obj.name, context[self.obj.name])
             else:
                 exec(source, self.parent.module.python_obj.__dict__)
 
     def __post_init__(self):
         super().__post_init__()
 
-    def get_actions_for_update(self, new_object: "Class") -> List["BaseAction"]:
-        if str(self.python_obj.__mro__) == str(new_object.python_obj.__mro__):
-            return super().get_actions_for_update(new_object)
+    def get_actions_for_update(self, new_obj: "Class") -> List["BaseAction"]:
+        if [c.__name__ for c in self.python_obj.__mro__] == [c.__name__ for c in new_obj.python_obj.__mro__]:
+            return super().get_actions_for_update(new_obj)
         else:
             raise FullReloadNeeded()
 
@@ -652,17 +784,15 @@ class Class(ContainerObj):
     def _python_obj_to_obj_classes(
         self, name: str, obj: Any
     ) -> Dict[str, Type[Object]]:
-        # Don't add objects not defined in base class
-        # if hasattr(obj, "__qualname__") and obj.__qualname__.split(".")[0] != self.python_obj.__name__:
-        #     return {}
-
-
         # If already process means it's just a reference
         if id(obj) in self.reloader.obj_to_modules and not self.is_primitive(obj):
             return {name: Reference}
 
         if isinstance(obj, classmethod):
             return {name: ClassMethod}
+
+        if isinstance(obj, staticmethod):
+            return {name: StaticMethod}
 
         if inspect.isfunction(obj):
             return {name: Method}
@@ -684,7 +814,7 @@ class Class(ContainerObj):
     def get_actions_for_add(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["BaseAction"]:
-        ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
+        ret = [self.Add(reloader=reloader, parent=parent, obj=obj)]
         ret.extend(self.get_actions_for_dependent_modules())
         return ret
 
@@ -693,39 +823,43 @@ class Class(ContainerObj):
 class Method(Function):
     @dataclass
     class Add(Function.Add):
-        object: "Method"
+        obj: "Method"
         parent: "Class"
 
         def execute(self) -> None:
             self.pre_execute()
-            self.object.python_obj = self.object.get_fixed_code(self.object, self.parent)
-            setattr(self.parent.python_obj, self.object.name, self.object.python_obj)
+            fun, code = self.obj.get_fixed_fun(self.obj, self.parent)
+            self.obj.python_obj = fun
+            self.obj.python_obj.__code__ = code
+            setattr(self.parent.python_obj, self.obj.name, self.obj.python_obj)
 
     class Update(Function.Update):
-        object: "Method"
-        new_object: Optional["Method"]
+        obj: "Method"
+        new_obj: Optional["Method"]
         parent: "Class"
 
         def execute(self) -> None:
             self.pre_execute()
-            self.old_code = self.object.python_obj.__code__
-            self.object.python_obj.__code__ = self.new_object.get_fixed_code(self.object, self.parent).__code__
+            self.old_code = self.obj.get_func(self.obj.python_obj).__code__
+
+            fun, code = self.obj.get_fixed_fun(self.obj, self.parent)
+            self.obj.get_func(self.obj.python_obj).__code__ = code
 
     @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj
 
-    def get_fixed_code(
+    def get_fixed_fun(
         self, original_method: "Method", parent: Optional["ContainerObj"] = None
-    ) -> Callable:
-        source = self.get_source()
+    ) -> Tuple[Callable, CodeType]:
+        source = self.source
         source = re.sub(r"super\(\s*\)", f"super({self.parent.name}, self)", source)
         source = indent(source, "    " * 4)
 
         if not parent:
             parent = self.parent
 
-        __class__str = f"__class__ = {parent.name}" if original_method.python_obj.__code__.co_freevars else ""
+        __class__str = f"__class__ = {parent.name}" if original_method.get_func(original_method.python_obj).__code__.co_freevars else ""
         builder = dedent(
             f"""
             def builder():
@@ -742,7 +876,7 @@ class Method(Function):
 
         fixed_consts = []
 
-        for c in fixed_fun.__code__.co_consts:
+        for c in self.get_func(fixed_fun).__code__.co_consts:
             if isinstance(c, str):
                 fixed_consts.append(c.replace("builder.<locals>", self.parent.name))
             else:
@@ -751,46 +885,48 @@ class Method(Function):
         fixed_consts = tuple(fixed_consts)
 
         code = CodeType(
-            original_method.python_obj.__code__.co_argcount,  # integer
-            original_method.python_obj.__code__.co_kwonlyargcount,  # integer
-            original_method.python_obj.__code__.co_nlocals,  # integer
-            original_method.python_obj.__code__.co_stacksize,  # integer
-            original_method.python_obj.__code__.co_flags,  # integer
-            fixed_fun.__code__.co_code,  # bytes
+            self.get_func(fixed_fun).__code__.co_argcount,  # integer
+            self.get_func(fixed_fun).__code__.co_kwonlyargcount,  # integer
+            self.get_func(fixed_fun).__code__.co_nlocals,  # integer
+            self.get_func(fixed_fun).__code__.co_stacksize,  # integer
+            original_method.get_func(original_method.python_obj).__code__.co_flags,  # integer
+            self.get_func(fixed_fun).__code__.co_code,  # bytes
             fixed_consts,  # tuple
-            fixed_fun.__code__.co_names,  # tuple
-            original_method.python_obj.__code__.co_varnames,  # tuple
-            original_method.python_obj.__code__.co_filename,  # string
-            original_method.python_obj.__code__.co_name,  # string
-            self.python_obj.__code__.co_firstlineno,  # integer
-            self.python_obj.__code__.co_lnotab,  # bytes
-            original_method.python_obj.__code__.co_freevars,  # tuple
-            original_method.python_obj.__code__.co_cellvars,  # tuple
+            self.get_func(fixed_fun).__code__.co_names,  # tuple
+            self.get_func(fixed_fun).__code__.co_varnames,  # tuple
+            original_method.get_func(original_method.python_obj).__code__.co_filename,  # string
+            original_method.get_func(original_method.python_obj).__code__.co_name,  # string
+            self.get_func(self.python_obj).__code__.co_firstlineno,  # integer
+            self.get_func(self.python_obj).__code__.co_lnotab,  # bytes
+            original_method.get_func(original_method.python_obj).__code__.co_freevars,  # tuple
+            self.get_func(fixed_fun).__code__.co_cellvars,  # tuple
         )
-        fixed_fun.__code__ = code
-        return fixed_fun
+        return fixed_fun, code
 
-    def get_source(self) -> str:
-        source_lines = self.module.module_descriptor.source.content.splitlines(keepends=True)
-        lnum = self.python_obj.__code__.co_firstlineno - 1
-
-        ret = inspect.getblock(source_lines[lnum:])
-        ret = "".join(ret)
-
-        ret = dedent(ret)
+    def equal(self, other: "Function") -> bool:
+        ret = self.source == other.source
         return ret
-
-    def __eq__(self, other: "Method") -> bool:
-        left = copy(self)
-        ret = left.get_source() == other.get_source()
-        return ret
-
 
 @dataclass
 class ClassMethod(Function):
     @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj.__func__
+
+    def equal(self, other: "Function") -> bool:
+        ret = self.source == other.source
+        return ret
+
+
+@dataclass
+class StaticMethod(Function):
+    @classmethod
+    def get_func(cls, obj: Any) -> Any:
+        return obj.__func__
+
+    def equal(self, other: "Function") -> bool:
+        ret = self.source == other.source
+        return ret
 
 
 @dataclass
@@ -820,14 +956,14 @@ class Variable(FinalObj):
 
 @dataclass
 class All(FinalObj):
-    def get_actions_for_update(self, new_object: "All") -> List["BaseAction"]:
-        if new_object.python_obj == self.python_obj:
+    def get_actions_for_update(self, new_obj: "All") -> List["BaseAction"]:
+        if new_obj.python_obj == self.python_obj:
             return []
         ret = [self.Update(
             reloader=self.reloader,
             parent=self.parent,
-            object=self,
-            new_object=new_object,
+            obj=self,
+            new_obj=new_obj,
         )]
         ret.extend(self.get_star_import_updates_actions())
         return ret
@@ -835,16 +971,16 @@ class All(FinalObj):
 
 @dataclass
 class ClassVariable(Variable):
-    def get_actions_for_update(self, new_object: "Variable") -> List["BaseAction"]:
-        if self.safe_compare(new_object):
+    def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
+        if self.safe_compare(new_obj):
             return []
 
         ret = [
             self.Update(
                 reloader=self.reloader,
                 parent=self.parent,
-                object=self,
-                new_object=new_object,
+                obj=self,
+                new_obj=new_obj,
             )
         ]
 
@@ -868,17 +1004,17 @@ class ClassVariable(Variable):
 
 @dataclass
 class DictionaryItem(FinalObj):
-    def get_actions_for_update(self, new_object: "Variable") -> List["BaseAction"]:
+    def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
 
-        if self.safe_compare(new_object):
+        if self.safe_compare(new_obj):
             return []
 
         ret = [
             self.Update(
                 reloader=self.reloader,
                 parent=self.parent,
-                object=self,
-                new_object=new_object,
+                obj=self,
+                new_obj=new_obj,
             )
         ]
 
@@ -891,16 +1027,16 @@ class Import(FinalObj):
     class Add(FinalObj.Add):
         def execute(self) -> None:
             self.pre_execute()
-            module = sys.modules.get(self.object.name, self.object.python_obj)
-            setattr(self.parent.python_obj, self.object.name, module)
+            module = sys.modules.get(self.obj.name, self.obj.python_obj)
+            setattr(self.parent.python_obj, self.obj.name, module)
 
-    def get_actions_for_update(self, new_object: "Variable") -> List["BaseAction"]:
+    def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
         return []
 
     # def get_actions_for_add(
     #     self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     # ) -> List["BaseAction"]:
-    #     ret = [self.Add(reloader=reloader, parent=parent, object=obj)]
+    #     ret = [self.Add(reloader=reloader, parent=parent, obj=obj)]
     #     ret.extend(self.get_actions_for_dependent_modules())
     #     return ret
 
@@ -996,7 +1132,7 @@ class Module(ContainerObj):
     @property
     def final_objs(self) -> List[FinalObj]:
         """
-        Return non container objects
+        Return non container objs
         """
         ret = []
         for o in self.children:
@@ -1076,7 +1212,7 @@ class UpdateModule(BaseAction):
 @dataclass
 class Dependency:
     module_file: Path
-    objects: Set[Tuple[str, int]]  # name, id
+    objs: Set[Tuple[str, int]]  # name, id
 
 
 @dataclass
@@ -1212,8 +1348,8 @@ class TrickyTypes:
         update_actions = [a for a in actions if isinstance(a, Object.Update)]
 
         for a in update_actions:
-            left = self.python_obj_to_dict(a.object.python_obj)
-            right = self.python_obj_to_dict(a.new_object.python_obj)
+            left = self.python_obj_to_dict(a.obj.python_obj)
+            right = self.python_obj_to_dict(a.new_obj.python_obj)
             pass
 
 
