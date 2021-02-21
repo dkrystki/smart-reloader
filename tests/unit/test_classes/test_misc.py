@@ -403,9 +403,9 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions(
-            "Update: Module: module", "Add: ClassVariable: module.Carwash.cars_n"
-        )
+        reloader.assert_actions('Update: Module: module',
+                                 'Add: ClassVariable: module.Carwash.cars_n',
+                                 'UpdateFirstLineNumber: Method: module.Carwash.fun')
 
         assert hasattr(module.device.Carwash, "sprinklers_n")
         assert hasattr(module.device.Carwash, "cars_n")
@@ -446,9 +446,9 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions(
-            "Update: Module: module", "Delete: ClassVariable: module.Carwash.cars_n"
-        )
+        reloader.assert_actions('Update: Module: module',
+                             'Delete: ClassVariable: module.Carwash.cars_n',
+                             'UpdateFirstLineNumber: Method: module.Carwash.fun')
 
         assert hasattr(module.device.Carwash, "sprinklers_n")
         assert not hasattr(module.device.Carwash, "cars_n")

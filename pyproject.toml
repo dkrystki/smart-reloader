@@ -37,6 +37,8 @@ django-cors-headers = "^3.2"
 tqdm = "^4.41"
 django-environ = "^0.4.5"
 django-filter = "^2.4.0"
+pandas = "1.1.4"
+pytest-ordering = "^0.6"
 
 [tool.poetry.scripts]
 smartreload = "smartreload.entrypoint:_main"

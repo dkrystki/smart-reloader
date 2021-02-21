@@ -413,5 +413,77 @@ class TestFunctions(utils.TestBase):
 
         assert module.device.fun(5) == 15
 
-    def test_moves_functions_first_lines(self):
-        assert False
+    def test_moves_functions_first_lines(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        def fun():
+            return 10
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        def added_fun():
+            return 5
+            
+        def fun():
+            return 10
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module',
+                             'Add: Function: module.added_fun',
+                             'UpdateFirstLineNumber: Function: module.fun')
+
+        assert module.device.fun.__code__.co_firstlineno == 5
+        reloader.rollback()
+        assert module.device.fun.__code__.co_firstlineno == 5
+
+    def test_add_decorator(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+            def eat_more(func):
+                def wrapped_func():
+                    return func() + 10
+                return wrapped_func
+
+            def how_many_eat(self):
+                return 1
+                
+            ref_fun = how_many_eat
+            """,
+        )
+
+        module.load()
+
+        module.rewrite(
+            """
+            def eat_more(func):
+                def wrapped_func():
+                    return func() + 10
+                return wrapped_func
+
+            @eat_more
+            def how_many_eat():
+                return 1
+                
+            ref_fun = how_many_eat
+            """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'DeepUpdate: Function: module.how_many_eat')
+
+        assert module.device.how_many_eat() == 11
+        assert module.device.ref_fun() == 11
+
+        reloader.rollback()
+        module.assert_not_changed()

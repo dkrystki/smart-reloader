@@ -1,4 +1,5 @@
 import ast
+import collections
 import ctypes
 import inspect
 import os
@@ -6,6 +7,7 @@ import gc
 import ast
 import re
 import sys
+import threading
 from collections import OrderedDict, defaultdict
 from copy import copy
 from threading import Thread
@@ -45,15 +47,15 @@ def equal(a: Any, b: Any) -> bool:
     try:
         ret = bool(a == b)
     except Exception as e:
-        return True
+        return False
 
     return ret
 
 
 equals: Dict[str, Callable] = defaultdict(lambda: equal)
 equals["pandas.core.series.Series"] = lambda a, b: a.equals(b)
-equals["pandas.core.series.Series"] = lambda a, b: a.equals(b)
 equals["pandas.DataFrame"] = lambda a, b: a.equals(b)
+equals["pandas.core.frame.DataFrame"] = lambda a, b: a.equals(b)
 
 
 class FullReloadNeeded(Exception):
@@ -98,7 +100,6 @@ class Object:
             return f"Add: {repr(self.obj)}"
 
         def execute(self) -> None:
-            self.pre_execute()
             self.parent.set_attr(self.obj.name, self.obj.python_obj)
 
         def rollback(self) -> None:
@@ -115,9 +116,7 @@ class Object:
             return f"Update: {repr(self.obj)}"
 
         def execute(self) -> None:
-            self.pre_execute()
             python_obj = self.new_obj.get_fixed_reference(self.obj.module)
-
             self.obj.parent.set_attr(self.obj.name, python_obj)
 
         def rollback(self) -> None:
@@ -148,7 +147,7 @@ class Object:
             return f"DeepUpdate: {repr(self.obj)}"
 
         def execute(self) -> None:
-            self.pre_execute()
+            raise NotImplementedError()
 
         def rollback(self) -> None:
             super().rollback()
@@ -163,7 +162,6 @@ class Object:
             return f"Delete: {repr(self.obj)}"
 
         def execute(self) -> None:
-            self.pre_execute()
             self.parent.del_attr(self.obj.name)
 
         def rollback(self) -> None:
@@ -184,8 +182,8 @@ class Object:
         ret = self.full_name.split(".")[-1]
         return ret
 
-    def get_actions_for_update(self, new_obj: "Object") -> List["BaseAction"]:
-        if self.safe_compare(new_obj):
+    def get_update_actions_for_not_equal(self, new_obj: "Object") -> List["BaseAction"]:
+        if self.reloader.compare_objs(self, new_obj):
             return []
 
         ret = [
@@ -196,6 +194,15 @@ class Object:
                 new_obj=new_obj,
             )
         ]
+
+        return ret
+
+    def get_actions_for_update(self, new_obj: "Object") -> List["BaseAction"]:
+        ret = []
+        ret.extend(self.get_update_actions_for_not_equal(new_obj))
+
+        if not ret:
+            return ret
 
         if not self.is_foreign_obj(self.python_obj):
             ret.extend(self.get_actions_for_dependent_modules())
@@ -280,12 +287,6 @@ class Object:
             return True
 
         return name in ["None"]
-
-    def safe_compare(self, other: "Object"):
-        try:
-            return equals[self.type](self.python_obj, other.python_obj)
-        except BaseException as e:
-            return False
 
     @property
     def source(self) -> str:
@@ -408,7 +409,6 @@ class Function(FinalObj):
         old_code: CodeType = field(init=False)
 
         def execute(self) -> None:
-            self.pre_execute()
             self.old_code = self.obj.get_func(
                 self.obj.python_obj
             ).__code__
@@ -420,6 +420,19 @@ class Function(FinalObj):
         def rollback(self) -> None:
             super().rollback()
             self.obj.get_func(self.obj.python_obj).__code__ = self.old_code
+
+    class UpdateFirstLineNumber(FinalObj.Update):
+        obj: "Function"
+        new_obj: Optional["Function"]
+
+        def execute(self) -> None:
+            self.obj.update_first_line_number(self.new_obj.python_obj.__code__.co_firstlineno)
+
+        def rollback(self) -> None:
+            super().rollback()
+
+        def __repr__(self) -> str:
+            return f"UpdateFirstLineNumber: {repr(self.obj)}"
 
     @dataclass
     class DeepUpdate(FinalObj.DeepUpdate):
@@ -480,8 +493,6 @@ class Function(FinalObj):
                     ctypes.c_int(1))
 
         def execute(self) -> None:
-            self.pre_execute()
-
             self.replace_obj(self.obj.python_obj, self.new_obj.python_obj)
             if hasattr(self.obj.python_obj, "__func__"):
                 self.replace_obj(self.obj.python_obj.__func__, self.new_obj.python_obj)
@@ -493,7 +504,8 @@ class Function(FinalObj):
                 o.execute()
 
     def get_actions_for_update(self, new_obj: "Function") -> List["BaseAction"]:
-        if type(self.python_obj) != type(new_obj.python_obj) or self.python_obj.__closure__ or new_obj.python_obj.__closure__:
+        wrapped = self.extract_wrapped(new_obj.get_func(new_obj.python_obj)) or self.extract_wrapped(self.get_func(self.python_obj))
+        if type(self.python_obj) != type(new_obj.python_obj) or wrapped:
             return [
                 self.DeepUpdate(
                     reloader=self.reloader,
@@ -512,6 +524,11 @@ class Function(FinalObj):
                     new_obj=new_obj,
                 )
             ]
+        elif self.get_func(self.python_obj).__code__.co_firstlineno != new_obj.get_func(new_obj.python_obj).__code__.co_firstlineno:
+            return [self.UpdateFirstLineNumber(reloader=self.reloader,
+                    parent=self.parent,
+                    obj=self,
+                    new_obj=new_obj)]
         else:
             return []
 
@@ -553,7 +570,9 @@ class Function(FinalObj):
     def not_equal(self, other: "Function") -> bool:
         return not (self.__class__.equal(self, other))
 
-    def _extract_wrapped(self, decorated: FunctionType):
+    def extract_wrapped(self, decorated: FunctionType):
+        if not decorated.__closure__:
+            return None
         closure = (c.cell_contents for c in decorated.__closure__)
         ret = next((c for c in closure if isinstance(c, FunctionType)), None)
         return ret
@@ -562,7 +581,7 @@ class Function(FinalObj):
     def source(self) -> str:
         func = self.get_func(self.python_obj)
         if func.__closure__:
-            target = self._extract_wrapped(func) or func
+            target = self.extract_wrapped(func) or func
         else:
             target = func
 
@@ -605,6 +624,32 @@ class Function(FinalObj):
         ret = name in ["__mro_override__", "__update_mro__"]
 
         return ret
+
+    def update_first_line_number(self, new_line_number: int) -> None:
+        args_order = [
+            "co_argcount",
+            "co_kwonlyargcount",
+            "co_nlocals",
+            "co_stacksize",
+            "co_flags",
+            "co_code",
+            "co_consts",
+            "co_names",
+            "co_varnames",
+            "co_filename",
+            "co_name",
+            "co_firstlineno",
+            "co_lnotab",
+            "co_freevars",
+            "co_cellvars"]
+        kwargs = {k: getattr(self.python_obj.__code__, k) for k in args_order}
+        kwargs["co_firstlineno"] = new_line_number
+
+        code = CodeType(
+            *kwargs.values()
+        )
+
+        self.python_obj.__code__ = code
 
 
 @dataclass
@@ -746,8 +791,7 @@ class Class(ContainerObj):
         def __repr__(self) -> str:
             return f"Add: {repr(self.obj)}"
 
-        def execute(self) -> None:
-            self.pre_execute()
+        def execute(self, dry_run=False) -> None:
             source = dedent(self.obj.source)
 
             if isinstance(self.parent, Class):
@@ -827,7 +871,6 @@ class Method(Function):
         parent: "Class"
 
         def execute(self) -> None:
-            self.pre_execute()
             fun, code = self.obj.get_fixed_fun(self.obj, self.parent)
             self.obj.python_obj = fun
             self.obj.python_obj.__code__ = code
@@ -839,10 +882,9 @@ class Method(Function):
         parent: "Class"
 
         def execute(self) -> None:
-            self.pre_execute()
             self.old_code = self.obj.get_func(self.obj.python_obj).__code__
 
-            fun, code = self.obj.get_fixed_fun(self.obj, self.parent)
+            fun, code = self.new_obj.get_fixed_fun(self.obj, self.parent)
             self.obj.get_func(self.obj.python_obj).__code__ = code
 
     @classmethod
@@ -906,6 +948,7 @@ class Method(Function):
     def equal(self, other: "Function") -> bool:
         ret = self.source == other.source
         return ret
+
 
 @dataclass
 class ClassMethod(Function):
@@ -971,23 +1014,6 @@ class All(FinalObj):
 
 @dataclass
 class ClassVariable(Variable):
-    def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
-        if self.safe_compare(new_obj):
-            return []
-
-        ret = [
-            self.Update(
-                reloader=self.reloader,
-                parent=self.parent,
-                obj=self,
-                new_obj=new_obj,
-            )
-        ]
-
-        if isinstance(self.parent.parent, Module):
-            ret.extend(self.get_actions_for_dependent_modules())
-        return ret
-
     @classmethod
     def _is_ignored(cls, name: str) -> bool:
         if name.startswith("__") and name.endswith("__"):
@@ -1005,18 +1031,11 @@ class ClassVariable(Variable):
 @dataclass
 class DictionaryItem(FinalObj):
     def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
+        ret = []
+        ret.extend(self.get_update_actions_for_not_equal(new_obj))
 
-        if self.safe_compare(new_obj):
-            return []
-
-        ret = [
-            self.Update(
-                reloader=self.reloader,
-                parent=self.parent,
-                obj=self,
-                new_obj=new_obj,
-            )
-        ]
+        if not ret:
+            return ret
 
         ret.extend(self.get_actions_for_dependent_modules())
         return ret
@@ -1026,7 +1045,6 @@ class DictionaryItem(FinalObj):
 class Import(FinalObj):
     class Add(FinalObj.Add):
         def execute(self) -> None:
-            self.pre_execute()
             module = sys.modules.get(self.obj.name, self.obj.python_obj)
             setattr(self.parent.python_obj, self.obj.name, module)
 
@@ -1043,6 +1061,16 @@ class Import(FinalObj):
     def get_actions_for_delete(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["BaseAction"]:
+        return []
+
+
+@dataclass
+class Frame(Object):
+    class Update(Object.Update):
+        def execute(self) -> None:
+            pass
+
+    def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
         return []
 
 
@@ -1102,6 +1130,10 @@ class Module(ContainerObj):
         self.module = self
         self._collect_children()
 
+    def _collect_children(self) -> None:
+        super()._collect_children()
+
+
     @property
     def file(self) -> Path:
         ret = self.module_descriptor.path
@@ -1155,6 +1187,61 @@ class Module(ContainerObj):
 
         return ret
 
+    # def _collect_frames(self) -> None:
+    #     from _pydevd_bundle.pydevd_comm import get_global_debugger, CMD_SET_BREAK
+    #     from _pydevd_bundle.pydevd_additional_thread_info import set_additional_thread_info
+    #     from _pydevd_bundle.pydevd_constants import IS_JYTH_LESS25, IS_PYCHARM, get_thread_id, get_current_thread_id
+    #     from _pydevd_bundle.pydevd_custom_frames import CustomFramesContainer, custom_frames_container_init
+    #     debugger = get_global_debugger()
+    #
+    #     frames = sys._current_frames()
+    #
+    #     thread_id, stopped_frame = next(((thread_id, f) for thread_id, f in frames.items() if "do_wait_suspend" in f.f_code.co_name), None)
+    #     thread = threading._active.get(thread_id)
+    #
+    #     if not stopped_frame:
+    #         return
+    #
+    #     def get_actual_frame(frame: FrameType) -> Optional[FrameType]:
+    #         if frame is None:
+    #             return None
+    #         if frame.f_code.co_filename == str(self.file):
+    #             return frame
+    #
+    #         return get_actual_frame(frame.f_back)
+    #
+    #     actual_frame = get_actual_frame(stopped_frame)
+    #
+    #     # actual_frame.f_lineno = 84
+    #     back_frame = actual_frame.f_back
+    #
+    #     info = set_additional_thread_info(thread)
+    #
+    #     if back_frame is not None:
+    #         # steps back to the same frame (in a return call it will stop in the 'back frame' for the user)
+    #         info.pydev_step_stop = actual_frame
+    #         debugger.set_trace_for_frame_and_parents(actual_frame)
+    #
+    #     del actual_frame
+    #     cmd = debugger.cmd_factory.make_thread_run_message(thread_id, info.pydev_step_cmd)
+    #     debugger.writer.add_command(cmd)
+    #
+    #     # with CustomFramesContainer.custom_frames_lock:
+    #     #     The ones that remained on last_running must now be removed.
+    #         # for frame_id in from_this_thread:
+    #         #     print >> sys.stderr, 'Removing created frame: ', frame_id
+    #             # self.writer.add_command(self.cmd_factory.make_thread_killed_message(frame_id))
+    #
+    #     # debugger.set_next_statement(actual_frame, event="line", func_name="get_queryset", next_line=84)
+    #
+    #     #
+    #     # for i in range(1, 10):
+    #     #     try:
+    #     #         frame = sys._getframe(i)
+    #     #     except ValueError:
+    #     #         return
+    #     #     pass
+
 
 @dataclass
 class UpdateModule(BaseAction):
@@ -1166,9 +1253,7 @@ class UpdateModule(BaseAction):
         self.module_descriptor = sys.modules.user_modules[str(self.module_file)][0]
         self.old_source = self.module_descriptor.source
 
-    def execute(self) -> None:
-        self.pre_execute()
-
+    def execute(self, dry_run=False) -> None:
         old_module = Module(module_descriptor=self.module_descriptor,
                             reloader=self.reloader, name=None,
                             python_obj=None,
@@ -1198,7 +1283,9 @@ class UpdateModule(BaseAction):
             if isinstance(a, UpdateModule) and self.reloader.is_already_reloaded(a.module_descriptor):
                 continue
 
-            a.execute()
+            a.pre_execute()
+            if not dry_run:
+                a.execute()
 
         self.module_descriptor.fetch_source()
 
@@ -1290,10 +1377,15 @@ class Modules(dict):
 
 @dataclass
 class TrickyTypes:
+    @dataclass
+    class TrickyType:
+        type_: Type
+        ignore_fields: List[str]
+
     reloader: "PartialReloader"
     modules: Modules = field(init=False)
     runner: Thread = field(init=False)
-    tricky_types: List[type] = field(init=False, default_factory=list)
+    content: Dict[int, TrickyType] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         self.user_modules = self.reloader.modules.user_modules
@@ -1301,10 +1393,9 @@ class TrickyTypes:
 
     def start(self):
         self.runner.start()
+        # self._run()
 
     def _run(self) -> None:
-        self.tricky_types = []
-
         # wait until importing is done
         while dependency_watcher.seconds_from_last_import() <= 1.0:
             sleep(0.1)
@@ -1312,28 +1403,69 @@ class TrickyTypes:
         for m in self.user_modules.keys():
             self.collect_diffs_from_module(Path(m))
 
-    def python_obj_to_dict(self, obj, classkey=None):
-        if isinstance(obj, type):
+    def python_obj_to_dict(self, obj, classkey=None, already_visited: Optional[List[Any]] = None, depth=0):
+        if not already_visited:
+            already_visited = []
+
+        if id(obj) in already_visited:
             return obj
 
-        if isinstance(obj, dict):
-            data = {}
-            for (k, v) in obj.items():
-                data[k] = self.python_obj_to_dict(v, classkey)
-            return data
-        elif hasattr(obj, "_ast"):
-            return self.python_obj_to_dict(obj._ast())
-        elif hasattr(obj, "__iter__") and not isinstance(obj, str):
-            return [self.python_obj_to_dict(v, classkey) for v in obj]
-        elif hasattr(obj, "__dict__"):
-            data = dict([(key, self.python_obj_to_dict(value, classkey))
-                         for key, value in dict(inspect.getmembers(obj)).items()
-                         if not callable(value)])
-            if classkey is not None and hasattr(obj, "__class__"):
-                data[classkey] = obj.__class__.__name__
-            return data
-        else:
+        if depth >= 1:
             return obj
+
+        already_visited.append(id(obj))
+
+        try:
+            if isinstance(obj, type):
+                return obj
+
+            if isinstance(obj, dict):
+                data = {}
+                for (k, v) in obj.items():
+                    data[k] = self.python_obj_to_dict(v, classkey, already_visited, depth+1)
+                return data
+            elif hasattr(obj, "__dict__"):
+                data = dict([(key, self.python_obj_to_dict(value, classkey, already_visited), depth+1)
+                             for key, value in dict(inspect.getmembers(obj)).items()
+                             if not callable(value)])
+                if classkey is not None and hasattr(obj, "__class__"):
+                    data[classkey] = obj.__class__.__name__
+                return data
+            else:
+                return obj
+        except Exception as e:
+            return obj
+
+    def flatten_dict(self, dictionary: Dict[str, Any], parent_key=False, separator='.') -> Dict[str, Any]:
+        """
+        Turn a nested dictionary into a flattened dictionary
+        :param dictionary: The dictionary to flatten
+        :param parent_key: The string to prepend to dictionary's keys
+        :param separator: The string used to separate flattened keys
+        :return: A flattened dictionary
+        """
+
+        items = []
+        for key, value in dictionary.items():
+            new_key = str(parent_key) + separator + key if parent_key else key
+            if isinstance(value, collections.MutableMapping):
+                if not value.items():
+                    items.append((new_key, None))
+                else:
+                    items.extend(self.flatten_dict(value, new_key, separator).items())
+            elif isinstance(value, list):
+                if len(value):
+                    for k, v in enumerate(value):
+                        items.extend(self.flatten_dict({str(k): v}, new_key).items())
+                else:
+                    items.append((new_key, None))
+            else:
+                items.append((new_key, value))
+        return dict(items)
+
+    def python_obj_to_flat_dict(self, python_obj: Any) -> Dict[str, Any]:
+        dictionary = python_obj.__dict__
+        return dictionary
 
     def wait_until_finished(self) -> None:
         while not self.finished():
@@ -1344,13 +1476,38 @@ class TrickyTypes:
         return ret
 
     def collect_diffs_from_module(self, module_file: Path) -> None:
-        actions = self.reloader.get_actions(module_file)
-        update_actions = [a for a in actions if isinstance(a, Object.Update)]
+        self.reloader.reload(module_file, dry_run=True)
+        update_actions = [a for a in self.reloader.applied_actions if isinstance(a, Object.Update)]
+        self.reloader.reset()
 
         for a in update_actions:
-            left = self.python_obj_to_dict(a.obj.python_obj)
-            right = self.python_obj_to_dict(a.new_obj.python_obj)
-            pass
+            left = self.python_obj_to_flat_dict(a.obj.python_obj)
+            right = self.python_obj_to_flat_dict(a.new_obj.python_obj)
+
+            ignore_fields = set(left).symmetric_difference(set(right))
+
+            for k, v in left.items():
+                try:
+                    right_v = right[k]
+                except KeyError:
+                    continue
+                if v != right_v:
+                    ignore_fields.add(k)
+
+            self.content[id(type(a.obj.python_obj))] = self.TrickyType(type(a.obj.python_obj), ignore_fields=list(ignore_fields))
+        pass
+
+    def compare_tricky_objects(self, left: Object, right: Object) -> bool:
+        left_flat = self.python_obj_to_flat_dict(left.python_obj)
+        right_flat = self.python_obj_to_flat_dict(right.python_obj)
+
+        keys = set(left_flat.keys()) - set(self.content[id(type(left.python_obj))].ignore_fields)
+
+        for k in keys:
+            if left_flat[k] != right_flat[k]:
+                return False
+
+        return True
 
 
 @dataclass
@@ -1372,10 +1529,10 @@ class PartialReloader:
         self.modules = Modules(self, sys.modules)
         sys.modules = self.modules
         dependency_watcher.enable()
-        # self.tricky_types = TrickyTypes(reloader=self)
-        # self.tricky_types.start()
+        self.tricky_types = TrickyTypes(reloader=self)
+        self.tricky_types.start()
 
-    def _reset(self) -> None:
+    def reset(self) -> None:
         self.named_obj_to_modules = defaultdict(set)
         self.obj_to_modules = defaultdict(set)
         self.applied_actions = []
@@ -1416,17 +1573,27 @@ class PartialReloader:
 
         pass
 
-    def reload(self, module_file: Path) -> None:
+    def reload(self, module_file: Path, dry_run=False) -> None:
         """
         :return: True if succeded False i unable to reload
         """
-        self._reset()
+        self.reset()
         self._collect_all_dependencies()
 
         action = UpdateModule(reloader=self,
                                module_file=module_file)
-        action.execute()
+        action.pre_execute()
+        action.execute(dry_run)
 
     def rollback(self) -> None:
         for a in reversed(self.applied_actions):
             a.rollback()
+
+    def custom_compare(self, other: "Object"):
+        return equals[self.type](self.python_obj, other.python_obj)
+
+    def compare_objs(self, left: Object, right: Object) -> bool:
+        if id(type(left.python_obj)) in self.tricky_types.content:
+            return self.tricky_types.compare_tricky_objects(left, right)
+
+        return equals[left.type](left.python_obj, right.python_obj)

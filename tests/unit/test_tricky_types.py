@@ -30,11 +30,12 @@ class TestTrickyTypes(utils.TestBase):
 
         module.load()
 
-        module.replace("Scoda", "Skoda")
-
         reloader.device.tricky_types.wait_until_finished()
+
+        module.replace("Scoda", "Skoda")
 
         reloader.reload(module)
 
         reloader.assert_actions('Update: Module: module',
                                 'Update: Variable: module.scoda')
+

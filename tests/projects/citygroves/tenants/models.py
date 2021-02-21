@@ -182,3 +182,4 @@ class EntryNotice(models.Model):
         message.attach(pdf)
 
         pdf_path.unlink()
+
