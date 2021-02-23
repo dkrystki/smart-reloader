@@ -23,8 +23,8 @@ class TestDictionaries(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: DictionaryItem: module.car_data.engine_power",
+            "Update Module: module",
+            "Update DictionaryItem: module.car_data.engine_power",
         )
 
         reloader.rollback()
@@ -50,9 +50,9 @@ class TestDictionaries(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Add: DictionaryItem: module.car_data.engine_force",
-            "Delete: DictionaryItem: module.car_data.engine_power",
+            "Update Module: module",
+            "Add DictionaryItem: module.car_data.engine_force",
+            "Delete DictionaryItem: module.car_data.engine_power",
         )
 
         assert "engine_power" not in module.device.car_data
@@ -81,9 +81,9 @@ class TestDictionaries(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Add: DictionaryItem: module.car_data.engine_force",
-            "Delete: DictionaryItem: module.car_data.engine_power",
+            "Update Module: module",
+            "Add DictionaryItem: module.car_data.engine_force",
+            "Delete DictionaryItem: module.car_data.engine_power",
         )
 
         assert "engine_power" not in module.device.car_data
@@ -117,7 +117,7 @@ class TestDictionaries(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module", "Add: Dictionary: module.car_data"
+            "Update Module: module", "Add Dictionary: module.car_data"
         )
 
         module.assert_obj_in("car_data")
@@ -150,7 +150,7 @@ class TestDictionaries(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module", "Delete: Dictionary: module.car_data"
+            "Update Module: module", "Delete Dictionary: module.car_data"
         )
 
         module.assert_obj_not_in("car_data")
@@ -178,9 +178,9 @@ class TestDictionaries(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module",
-            "Add: Dictionary: module.car_specs",
-            "Delete: Dictionary: module.car_data",
+            "Update Module: module",
+            "Add Dictionary: module.car_specs",
+            "Delete Dictionary: module.car_data",
         )
 
         module.assert_obj_in("car_specs")
@@ -216,8 +216,8 @@ class TestDictionaries(utils.TestBase):
         module.replace('"number": 100', '"number": 150')
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module',
-                                'Update: DictionaryItem: module.cake_shop.clients.number')
+        reloader.assert_actions('Update Module: module',
+                                'Update DictionaryItem: module.cake_shop.clients.number')
 
         assert module.device.cake_shop["clients"]["number"] == 150
 
@@ -258,7 +258,7 @@ class TestDictionaries(utils.TestBase):
         """)
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Update: DictionaryItem: module.cake_shop.clients')
+        reloader.assert_actions('Update Module: module', 'Update DictionaryItem: module.cake_shop.clients')
 
         assert module.device.cake_shop["clients"]["number"] == 12
 

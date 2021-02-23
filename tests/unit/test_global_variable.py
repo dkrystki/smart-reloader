@@ -77,16 +77,16 @@ class TestGlobalVariable(utils.TestBase):
 
         reloader.reload(carwash)
         reloader.assert_actions(
-            "Update: Module: sandbox.carwash",
-            "Update: Variable: sandbox.carwash.sprinkler_n",
-            "Update: Module: sandbox.car",
-            "Update: Variable: sandbox.car.sprinkler_n",
-            "Update: Variable: sandbox.car.car_sprinklers",
-            "Update: Module: sandbox.accounting",
-            "Update: Variable: sandbox.accounting.car_sprinklers",
-            "Update: Variable: sandbox.accounting.sprinklers_from_accounting",
-            "Update: Module: sandbox.client",
-            "Update: Variable: sandbox.client.client_car_sprinklers",
+            "Update Module: sandbox.carwash",
+            "Update Variable: sandbox.carwash.sprinkler_n",
+            "Update Module: sandbox.car",
+            "Update Variable: sandbox.car.sprinkler_n",
+            "Update Variable: sandbox.car.car_sprinklers",
+            "Update Module: sandbox.accounting",
+            "Update Variable: sandbox.accounting.car_sprinklers",
+            "Update Variable: sandbox.accounting.sprinklers_from_accounting",
+            "Update Module: sandbox.client",
+            "Update Variable: sandbox.client.client_car_sprinklers",
         )
 
         assert carwash.device.sprinkler_n == 6
@@ -145,11 +145,11 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(carwash)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.carwash",
-            "Update: Variable: sandbox.carwash.sprinkler_n",
-            "Update: Module: sandbox.car",
-            "Update: Variable: sandbox.car.sprinkler_n",
-            "Update: Variable: sandbox.car.car_sprinklers",
+            "Update Module: sandbox.carwash",
+            "Update Variable: sandbox.carwash.sprinkler_n",
+            "Update Module: sandbox.car",
+            "Update Variable: sandbox.car.sprinkler_n",
+            "Update Variable: sandbox.car.car_sprinklers",
         )
 
         assert carwash.device.sprinkler_n == 6
@@ -209,13 +209,13 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(carwash)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.carwash",
-            "Update: Variable: sandbox.carwash.sprinkler_n",
-            "Update: Module: sandbox.container",
-            "Update: Variable: sandbox.container.sprinkler_n",
-            "Update: Module: sandbox.car",
-            "Update: Variable: sandbox.car.sprinkler_n",
-            "Update: Variable: sandbox.car.car_sprinklers",
+            "Update Module: sandbox.carwash",
+            "Update Variable: sandbox.carwash.sprinkler_n",
+            "Update Module: sandbox.container",
+            "Update Variable: sandbox.container.sprinkler_n",
+            "Update Module: sandbox.car",
+            "Update Variable: sandbox.car.sprinkler_n",
+            "Update Variable: sandbox.car.car_sprinklers",
         )
 
         assert carwash.device.sprinkler_n == 6
@@ -245,7 +245,7 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Add: Variable: module.global_var2"
+            "Update Module: module", "Add Variable: module.global_var2"
         )
 
         module.assert_obj_in("global_var1")
@@ -280,7 +280,7 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Update: Variable: module.car_class"
+            "Update Module: module", "Update Variable: module.car_class"
         )
 
         assert module.device.Car is old_Car_class
@@ -311,8 +311,8 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: Variable: module.car_fun",
+            "Update Module: module",
+            "Update Variable: module.car_fun",
         )
 
         assert module.device.fun is old_fun
@@ -376,11 +376,11 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: Variable: module.sprinkler_n",
-            "Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_1",
-            "Update: DictionaryItem: module.sample_dict.sprinkler_n_plus_2",
-            "Update: ClassVariable: module.Car.car_sprinkler_n",
+            "Update Module: module",
+            "Update Variable: module.sprinkler_n",
+            "Update DictionaryItem: module.sample_dict.sprinkler_n_plus_1",
+            "Update DictionaryItem: module.sample_dict.sprinkler_n_plus_2",
+            "Update ClassVariable: module.Car.car_sprinkler_n",
         )
 
         assert print_sprinkler_id == id(module.device.print_sprinkler)
@@ -417,7 +417,7 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Delete: Variable: module.sprinkler_n"
+            "Update Module: module", "Delete Variable: module.sprinkler_n"
         )
 
         assert not hasattr(module.device, "sprinkler_n")

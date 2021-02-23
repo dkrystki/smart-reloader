@@ -26,9 +26,9 @@ if TYPE_CHECKING:
 class Reloader(FileSystemEventHandler):
     def __init__(self, root: str, config: "Config"):
         self.root = Path(root)
-        self.partial_reloader = PartialReloader(root=self.root, logger=logger)
 
         self.config = config
+        self.partial_reloader = PartialReloader(root=self.root, logger=logger, config=self.config)
 
         super().__init__()
 

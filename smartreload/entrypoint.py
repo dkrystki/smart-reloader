@@ -33,7 +33,7 @@ class SmartReload:
         
         sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
         
-        config_file = Path("smartreload_config.py")
+        config_file = Path("smartreloader_config.py")
         
         if config_file.exists():
             config = import_from_file(config_file, package_root=Path(".")).Config()

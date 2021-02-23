@@ -29,10 +29,12 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
+    Type, TYPE_CHECKING,
 )
 
 from . import console, dependency_watcher, misc
+
+from .config import BaseConfig
 
 dataclass = dataclass(repr=False)
 
@@ -61,13 +63,9 @@ def compare_django_descriptors(left: Any, right: Any):
     return left.field.blank == right.field.blank
 
 
-equals: Dict[str, Callable] = defaultdict(lambda: equal)
-equals["pandas.core.series.Series"] = lambda a, b: a.equals(b)
-equals["pandas.DataFrame"] = lambda a, b: a.equals(b)
-equals["pandas.core.frame.DataFrame"] = lambda a, b: a.equals(b)
-equals["pandas.core.frame.DataFrame"] = lambda a, b: a.equals(b)
-equals['django.db.models.query_utils.DeferredAttribute'] = compare_django_fields
-equals["django.db.models.fields.related_descriptors.ForwardManyToOneDescriptor"] = compare_django_descriptors
+# equals: Dict[str, Callable] = defaultdict(lambda: equal)
+# equals['django.db.models.query_utils.DeferredAttribute'] = compare_django_fields
+# equals["django.db.models.fields.related_descriptors.ForwardManyToOneDescriptor"] = compare_django_descriptors
 
 
 class FullReloadNeeded(Exception):
@@ -109,7 +107,7 @@ class Object(ABC):
         obj: "Object"
 
         def __repr__(self) -> str:
-            return f"Add: {repr(self.obj)}"
+            return f"Add {repr(self.obj)}"
 
         def execute(self) -> None:
             self.parent.set_attr(self.obj.name, self.obj.python_obj)
@@ -125,7 +123,7 @@ class Object(ABC):
         new_obj: Optional["Object"]
 
         def __repr__(self) -> str:
-            return f"Update: {repr(self.obj)}"
+            return f"Update {repr(self.obj)}"
 
         def execute(self) -> None:
             python_obj = self.new_obj.get_fixed_reference(self.obj.module)
@@ -156,7 +154,7 @@ class Object(ABC):
             return ret
 
         def __repr__(self) -> str:
-            return f"DeepUpdate: {repr(self.obj)}"
+            return f"Update {repr(self.obj)}"
 
         def execute(self) -> None:
             raise NotImplementedError()
@@ -170,7 +168,7 @@ class Object(ABC):
         obj: "Object"
 
         def __repr__(self) -> str:
-            return f"Delete: {repr(self.obj)}"
+            return f"Delete {repr(self.obj)}"
 
         def execute(self) -> None:
             self.parent.del_attr(self.obj.name)
@@ -192,6 +190,8 @@ class Object(ABC):
     parent: Optional["ContainerObj"]
     module: Optional["Module"]
     reloader: "PartialReloader"
+
+    namespace: ClassVar[str] = ""
 
     def __post_init__(self) -> None:
         self.module.register_obj(self)
@@ -220,11 +220,23 @@ class Object(ABC):
         return ret
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
-        raise NotImplementedError()
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
+        return [ContainerObj]
+
+    def compare(self, against: "Object") -> bool:
+        try:
+            return self.python_obj.__dict__ == against.python_obj.__dict__
+        except AttributeError:
+            pass
+        try:
+            ret = bool(self.python_obj == against.python_obj)
+        except Exception as e:
+            return False
+
+        return ret
 
     def get_update_actions_for_not_equal(self, new_obj: "Object") -> List["BaseAction"]:
-        if self.reloader.compare_objs(self, new_obj):
+        if self.compare(new_obj):
             return []
 
         ret = [
@@ -390,7 +402,8 @@ class Object(ABC):
         return self.python_obj != other.python_obj
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}: {self.full_name}"
+        namespace = self.namespace + "." if self.namespace else ""
+        return f"{namespace}{self.__class__.__name__}: {self.full_name}"
 
     def get_flat_repr(self) -> Dict[str, "Object"]:
         return {self.full_name: self}
@@ -438,12 +451,12 @@ class Reference(FinalObj):
         return ret
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [ContainerObj]
 
     @classmethod
     def get_rank(cls) -> int:
-        return 100
+        return 1e4
 
 
 @dataclass
@@ -553,7 +566,7 @@ class Function(FinalObj):
         return 20
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Module]
 
     @classmethod
@@ -694,7 +707,7 @@ class PropertyGetter(Function):
         return obj.fget
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class]
 
     @classmethod
@@ -709,7 +722,7 @@ class PropertySetter(Function):
         return obj.fset
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class]
 
     @classmethod
@@ -737,9 +750,14 @@ class ContainerObj(Object, ABC):
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
         return False
 
+    @property
+    def child_classes(self) -> List[Type[Object]]:
+        ret = self.reloader.object_classes_manager.obj_class_to_children_classes[self.__class__]
+        return ret
+
     def _get_candidate(self, name: str, obj: Any) -> Optional[Object.Candidates]:
         all_candidates = []
-        for c in self.get_child_classes():
+        for c in self.child_classes:
             candidates = c.get_candidates(name, obj, potential_parent=self, module=self.module,
                                                reloader=self.reloader)
             if not candidates:
@@ -764,14 +782,6 @@ class ContainerObj(Object, ABC):
             candidate = self._get_candidate(name=n, obj=o)
             if candidate:
                 self.children.update(candidate.content)
-
-    def get_child_classes(self) -> List[Type["Object"]]:
-        ret = []
-        for c in self.reloader.object_classes:
-            if c.get_parent_classes() and any(issubclass(self.__class__, pc) for pc in c.get_parent_classes()):
-                ret.append(c)
-
-        return ret
 
     @property
     def source(self) -> str:
@@ -833,7 +843,7 @@ class Class(ContainerObj):
     @dataclass
     class Add(ContainerObj.Add):
         def __repr__(self) -> str:
-            return f"Add: {repr(self.obj)}"
+            return f"Add {repr(self.obj)}"
 
         def execute(self, dry_run=False) -> None:
             source = dedent(self.obj.source)
@@ -861,7 +871,7 @@ class Class(ContainerObj):
         return 30
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class, Module]
 
     @classmethod
@@ -925,7 +935,7 @@ class Method(Function):
         return 10
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class]
 
     @classmethod
@@ -998,7 +1008,7 @@ class Method(Function):
 @dataclass
 class ClassMethod(Function):
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class]
 
     @classmethod
@@ -1022,7 +1032,7 @@ class ClassMethod(Function):
 @dataclass
 class StaticMethod(Function):
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class]
 
     @classmethod
@@ -1046,7 +1056,7 @@ class StaticMethod(Function):
 @dataclass
 class Dictionary(ContainerObj):
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [ContainerObj]
 
     @classmethod
@@ -1079,7 +1089,7 @@ class Dictionary(ContainerObj):
 @dataclass
 class Variable(FinalObj):
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Module]
 
     @classmethod
@@ -1097,7 +1107,7 @@ class Variable(FinalObj):
 @dataclass
 class All(FinalObj):
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Module]
 
     @classmethod
@@ -1125,7 +1135,7 @@ class All(FinalObj):
 @dataclass
 class ClassVariable(Variable):
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class]
 
     @classmethod
@@ -1154,7 +1164,7 @@ class DictionaryItem(FinalObj):
         return True
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Dictionary]
 
     def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
@@ -1195,13 +1205,20 @@ class Import(FinalObj):
     #     return ret
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Module]
 
     def get_actions_for_delete(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["BaseAction"]:
         return []
+
+
+@dataclass
+class UserObject(Object, ABC):
+    @classmethod
+    def get_rank(cls) -> int:
+        return 100
 
 
 @dataclass
@@ -1261,7 +1278,7 @@ class Module(ContainerObj):
     )
 
     def __post_init__(self) -> None:
-        self.python_obj = self.module_descriptor.module
+        self.python_obj = self.module_descriptor.body
         self.name = self.module_descriptor.name
         self.parent = None
         self.module = self
@@ -1272,7 +1289,7 @@ class Module(ContainerObj):
         return False
 
     @classmethod
-    def get_parent_classes(cls) -> List[Type["Object"]]:
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return []
 
     @property
@@ -1326,30 +1343,19 @@ class UpdateModule(BaseAction):
         self.old_source = self.module_descriptor.source
 
     def execute(self, dry_run=False) -> None:
-        old_module = Module(module_descriptor=self.module_descriptor,
-                            name=None,
-                            python_obj=None,
-                            parent=None,
-                            reloader=self.reloader,
-                            module=None)
-
         trace = sys.gettrace()
         sys.settrace(None)
-        module_obj = misc.import_from_file(old_module.file, self.reloader.root)
+        module_obj = misc.import_from_file(self.module_descriptor.path, self.reloader.root)
         sys.settrace(trace)
 
-        module_descriptor = ModuleDescriptor(name=old_module.module_descriptor.name,
-                                             path=old_module.module_descriptor.path,
-                                             module=module_obj)
-        new_module = Module(
-            module_descriptor=module_descriptor,
-            name=old_module.name,
-            python_obj=None,
-            parent=None,
-            module=None,
-            reloader=self.reloader)
+        new_module_descriptor = ModuleDescriptor(reloader=self.reloader,
+                                                 name=self.module_descriptor.name,
+                                                 path=self.module_descriptor.path,
+                                                 body=module_obj)
 
-        actions = old_module.get_actions_for_update(new_module)
+        new_module_descriptor.post_execute()
+
+        actions = self.module_descriptor.module_obj.get_actions_for_update(new_module_descriptor.module_obj)
         actions.sort(key=lambda a: a.priority, reverse=True)
 
         for a in actions:
@@ -1366,7 +1372,7 @@ class UpdateModule(BaseAction):
         self.module_descriptor.source = self.old_source
 
     def __repr__(self) -> str:
-        return f"Update: Module: {self.module_descriptor.name}"
+        return f"Update Module: {self.module_descriptor.name}"
 
 
 @dataclass
@@ -1377,16 +1383,26 @@ class Dependency:
 
 @dataclass
 class ModuleDescriptor:
+    reloader: "PartialReloader"
     name: str
     path: Path
-    module: ModuleType
+    body: ModuleType
     source: Source = field(init=False)
+    module_obj: Module = field(init=False)
 
     def __post_init__(self):
         self.fetch_source()
 
     def fetch_source(self) -> None:
         self.source = Source(self.path)
+
+    def post_execute(self):
+        self.module_obj = Module(module_descriptor=self,
+                                 name=None,
+                                 python_obj=self.body,
+                                 parent=None,
+                                 reloader=self.reloader,
+                                 module=None)
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -1417,7 +1433,8 @@ class Modules(dict):
         file = Path(value.__file__)
         module = ModuleDescriptor(name = key,
                               path=file,
-                              module=value)
+                              body=value,
+                                reloader=self.reloader)
         self.user_modules[value.__file__].append(module)
 
     def __getitem__(self, key: str):
@@ -1449,31 +1466,27 @@ class Modules(dict):
 
 
 @dataclass
-class PartialReloader:
-    root: Path
-    logger: Logger
-    named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleDescriptor]] = field(init=False,
-                                                                                default_factory=lambda: defaultdict(set))
-    obj_to_modules: DefaultDict[int, Set[ModuleDescriptor]] = field(init=False,
-                                                              default_factory=lambda: defaultdict(set))
-    applied_actions: List[BaseAction] = field(init=False, default_factory=list)
-    modules: Modules = field(init=False)
-    object_classes: List[Type[Object]] = field(init=False)
+class ObjectClassesManager:
+    reloader: "PartialReloader"
 
-    def __post_init__(self) -> None:
-        self.root = self.root.resolve()
-        self.logger.debug(f"Creating partial reloader for {self.root}")
+    obj_classes: List[Type[Object]] = field(init=False)
+    obj_class_to_children_classes: Dict[Type[Object], List[Type[Object]]] = field(init=False, default_factory=lambda: defaultdict(list))
 
-        self.modules = Modules(self, sys.modules)
-        sys.modules = self.modules
-        dependency_watcher.enable()
+    def __post_init__(self):
+        self.refresh()
 
+    def refresh(self) -> None:
         self._collect_object_classes()
+        self._collect_object_classes_children()
 
     def _collect_object_classes(self) -> None:
         self.object_classes = []
+        self._collect_object_classes_from_context(globals())
+        for p in self.reloader.plugins:
+            self._collect_object_classes_from_context(p.__dict__)
 
-        for c in globals().values():
+    def _collect_object_classes_from_context(self, context: Dict[str, Any]) -> None:
+        for c in context.values():
             if not isinstance(c, type):
                 continue
             if not issubclass(c, Object):
@@ -1482,7 +1495,57 @@ class PartialReloader:
             if ABC in  c.__bases__:
                 continue
 
+            if "namespace" in context:
+                c.namespace = context["namespace"]
+
             self.object_classes.append(c)
+
+    def _collect_object_classes_children(self) -> None:
+        self.obj_class_to_children_classes = defaultdict(list)
+        for c1 in self.object_classes:
+            for c2 in self.object_classes:
+                if c2.get_parent_classes() and any(issubclass(c1, pc) for pc in c2.get_parent_classes()):
+                    self.obj_class_to_children_classes[c1].append(c2)
+
+
+@dataclass
+class PartialReloader:
+    root: Path
+    logger: Logger
+    named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleDescriptor]] = field(init=False,
+                                                                                default_factory=lambda: defaultdict(set))
+    obj_to_modules: DefaultDict[int, Set[ModuleDescriptor]] = field(init=False,
+                                                              default_factory=lambda: defaultdict(set))
+
+    config: Optional["BaseConfig"] = BaseConfig()
+    applied_actions: List[BaseAction] = field(init=False, default_factory=list)
+    modules: Modules = field(init=False)
+    object_classes_manager: ObjectClassesManager = field(init=False)
+    plugins: List[ModuleType] = field(init=False, default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.root = self.root.resolve()
+        self.logger.debug(f"Creating partial reloader for {self.root}")
+
+        self.object_classes_manager = ObjectClassesManager(self)
+
+        dependency_watcher.post_module_exec_hook = self.post_module_exec_hook
+
+        self.modules = Modules(self, sys.modules)
+        sys.modules = self.modules
+        dependency_watcher.enable()
+
+        for p in self.config.plugins():
+            self.add_plugin(p)
+
+    def add_plugin(self, plugin: ModuleType) -> None:
+        self.plugins.append(plugin)
+        self.object_classes_manager.refresh()
+
+    def post_module_exec_hook(self, module: ModuleType):
+        module_descriptors = self.modules.user_modules.get(module.__file__, [])
+        for m in module_descriptors:
+            m.post_execute()
 
     def reset(self) -> None:
         self.named_obj_to_modules = defaultdict(set)
@@ -1498,7 +1561,7 @@ class PartialReloader:
                 return True
 
     def _collect_dependencies(self, module: ModuleDescriptor) -> None:
-        for n, o in module.module.__dict__.items():
+        for n, o in module.body.__dict__.items():
             if n.startswith("__") and n.endswith("__"):
                 continue
             self.named_obj_to_modules[(n, id(o))].add(module)
@@ -1540,9 +1603,3 @@ class PartialReloader:
     def rollback(self) -> None:
         for a in reversed(self.applied_actions):
             a.rollback()
-
-    def custom_compare(self, other: "Object"):
-        return equals[self.type](self.python_obj, other.python_obj)
-
-    def compare_objs(self, left: Object, right: Object) -> bool:
-        return equals[left.type](left.python_obj, right.python_obj)

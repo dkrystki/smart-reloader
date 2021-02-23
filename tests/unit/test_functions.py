@@ -29,7 +29,7 @@ class TestFunctions(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions("Update: Module: module", "Add: Function: module.fun2")
+        reloader.assert_actions("Update Module: module", "Add Function: module.fun2")
 
         module.assert_obj_in("fun")
         module.assert_obj_in("fun2")
@@ -78,7 +78,7 @@ class TestFunctions(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module", "Update: Function: module.fun"
+            "Update Module: module", "Update Function: module.fun"
         )
 
         module.assert_obj_in("fun")
@@ -115,7 +115,7 @@ class TestFunctions(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Delete: Function: module.fun2"
+            "Update Module: module", "Delete Function: module.fun2"
         )
 
         assert hasattr(module.device, "fun1")
@@ -146,9 +146,9 @@ class TestFunctions(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module",
-            "Add: Function: module.fun_renamed",
-            "Delete: Function: module.fun1",
+            "Update Module: module",
+            "Add Function: module.fun_renamed",
+            "Delete Function: module.fun1",
         )
 
         assert not hasattr(module.device, "fun1")
@@ -193,7 +193,7 @@ class TestFunctions(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Update: Function: module.fun"
+            "Update Module: module", "Update Function: module.fun"
         )
 
         assert id(module.device.Car) == car_class_id
@@ -227,7 +227,7 @@ class TestFunctions(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module", "Update: Function: module.other_fun"
+            "Update Module: module", "Update Function: module.other_fun"
         )
 
         assert module.device.fun() == 20
@@ -262,9 +262,9 @@ class TestFunctions(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: Function: module.other_fun",
-            "Update: Function: module.fun",
+            "Update Module: module",
+            "Update Function: module.other_fun",
+            "Update Function: module.fun",
         )
 
         assert module.device.fun() == 25
@@ -296,9 +296,9 @@ class TestFunctions(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module",
-            "Add: Function: module.other_fun",
-            "Update: Function: module.fun",
+            "Update Module: module",
+            "Add Function: module.other_fun",
+            "Update Function: module.fun",
         )
 
         assert module.device.fun() == 20
@@ -328,7 +328,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Update: Function: module.fun')
+        reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
         assert module.device.fun() == 15
 
         reloader.rollback()
@@ -358,7 +358,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Update: Function: module.fun')
+        reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
         assert module.device.fun() == 30
 
         reloader.rollback()
@@ -381,7 +381,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Add: Function: module.fun')
+        reloader.assert_actions('Update Module: module', 'Add Function: module.fun')
         assert module.device.fun(5) == 15
 
         reloader.rollback()
@@ -405,7 +405,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Update: Function: module.fun')
+        reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
         assert module.device.fun(5) == 50
 
         reloader.rollback()
@@ -436,8 +436,8 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module',
-                             'Add: Function: module.added_fun',
+        reloader.assert_actions('Update Module: module',
+                             'Add Function: module.added_fun',
                              'UpdateFirstLineNumber: Function: module.fun')
 
         assert module.device.fun.__code__.co_firstlineno == 5
@@ -480,7 +480,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'DeepUpdate: Function: module.how_many_eat')
+        reloader.assert_actions('Update Module: module', 'Update Function: module.how_many_eat')
 
         assert module.device.how_many_eat() == 11
         assert module.device.ref_fun() == 11

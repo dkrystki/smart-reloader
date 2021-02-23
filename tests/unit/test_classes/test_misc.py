@@ -58,10 +58,10 @@ class TestClasses(utils.TestBase):
         reloader.reload(carwash)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.carwash",
-            "Update: ClassVariable: sandbox.carwash.Carwash.sprinkler_n",
-            "Update: Module: sandbox.car",
-            "Update: ClassVariable: sandbox.car.Car.car_sprinklers",
+            "Update Module: sandbox.carwash",
+            "Update ClassVariable: sandbox.carwash.Carwash.sprinkler_n",
+            "Update Module: sandbox.car",
+            "Update ClassVariable: sandbox.car.Car.car_sprinklers",
         )
 
         assert carwash.device.Carwash.sprinkler_n == 6
@@ -124,9 +124,9 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: ClassVariable: module.CarwashBase.sprinklers_n",
-            "Update: ClassVariable: module.Carwash.sprinklers_n",
+            "Update Module: module",
+            "Update ClassVariable: module.CarwashBase.sprinklers_n",
+            "Update ClassVariable: module.Carwash.sprinklers_n",
         )
 
         assert module.device.CarwashBase.sprinklers_n == 55
@@ -174,7 +174,7 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update: Module: module", "Add: Method: module.Carwash.__init__"
+            "Update Module: module", "Add Method: module.Carwash.__init__"
         )
 
         assert module.device.Carwash(30).car_n == 30
@@ -225,7 +225,7 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Update: Method: module.Carwash.__init__"
+            "Update Module: module", "Update Method: module.Carwash.__init__"
         )
 
         assert module.device.Carwash(30).car_n == 40
@@ -290,7 +290,7 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Update: ClassVariable: module.Carwash.name_type"
+            "Update Module: module", "Update ClassVariable: module.Carwash.name_type"
         )
 
         assert module.device.Carwash.name_type is str
@@ -323,7 +323,7 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions("Update: Module: module", "Add: Class: module.Carwash")
+        reloader.assert_actions("Update Module: module", "Add Class: module.Carwash")
 
         assert module.device.Carwash.sprinklers_n == 55
         assert module.device.Carwash().print_sprinklers() == 20
@@ -403,8 +403,8 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions('Update: Module: module',
-                                 'Add: ClassVariable: module.Carwash.cars_n',
+        reloader.assert_actions('Update Module: module',
+                                 'Add ClassVariable: module.Carwash.cars_n',
                                  'UpdateFirstLineNumber: Method: module.Carwash.fun')
 
         assert hasattr(module.device.Carwash, "sprinklers_n")
@@ -446,8 +446,8 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions('Update: Module: module',
-                             'Delete: ClassVariable: module.Carwash.cars_n',
+        reloader.assert_actions('Update Module: module',
+                             'Delete ClassVariable: module.Carwash.cars_n',
                              'UpdateFirstLineNumber: Method: module.Carwash.fun')
 
         assert hasattr(module.device.Carwash, "sprinklers_n")
@@ -498,9 +498,9 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: ClassMethod: module.Carwash.print_sprinklers_cls",
-            "Update: Method: module.Carwash.print_sprinklers",
+            "Update Module: module",
+            "Update ClassMethod: module.Carwash.print_sprinklers_cls",
+            "Update Method: module.Carwash.print_sprinklers",
         )
 
         assert (
@@ -540,7 +540,7 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Update: Method: module.Carwash.__repr__"
+            "Update Module: module", "Update Method: module.Carwash.__repr__"
         )
 
         assert repr(module.device.Carwash()) == "MyCarwash"
@@ -613,11 +613,11 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: ClassVariable: module.Car.engine",
-            "Update: ClassVariable: module.Car.engine_class",
-            "Update: ClassVariable: module.Carwash.car_a",
-            "Update: Method: module.Carwash.__init__",
+            "Update Module: module",
+            "Update ClassVariable: module.Car.engine",
+            "Update ClassVariable: module.Car.engine_class",
+            "Update ClassVariable: module.Carwash.car_a",
+            "Update Method: module.Carwash.__init__",
         )
 
         assert module.device.Engine is old_engine_class
@@ -669,8 +669,8 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: PropertyGetter: module.Carwash.sprinklers_n",
+            "Update Module: module",
+            "Update PropertyGetter: module.Carwash.sprinklers_n",
         )
 
         assert module.device.Carwash().sprinklers_n == 10
@@ -704,8 +704,8 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: PropertySetter: module.Carwash.sprinklers_n__setter__",
+            "Update Module: module",
+            "Update PropertySetter: module.Carwash.sprinklers_n__setter__",
         )
 
         assert module.device.Carwash().sprinklers_n == 10
@@ -737,7 +737,7 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Add: Method: module.Carwash.print_sprinklers"
+            "Update Module: module", "Add Method: module.Carwash.print_sprinklers"
         )
 
         assert module.device.Carwash().print_sprinklers() == "There are 5 sprinklers."
@@ -777,7 +777,7 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Delete: Method: module.Carwash.fun2"
+            "Update Module: module", "Delete Method: module.Carwash.fun2"
         )
 
         assert hasattr(module.device.Carwash, "fun1")
@@ -807,7 +807,7 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions('Update: Module: module', 'Update: Method: module.CarwashBase.fun')
+        reloader.assert_actions('Update Module: module', 'Update Method: module.CarwashBase.fun')
 
         assert module.device.CarwashBase().fun() == 10
         assert module.device.Carwash().fun() == 10
@@ -841,7 +841,7 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Add: Class: module.Carwash.Meta"
+            "Update Module: module", "Add Class: module.Carwash.Meta"
         )
         assert hasattr(module.device.Carwash, "Meta")
 
@@ -880,8 +880,8 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
-            "Update: ClassVariable: module.Carwash.Meta.car_numbers",
+            "Update Module: module",
+            "Update ClassVariable: module.Carwash.Meta.car_numbers",
         )
         assert id(module.device.Carwash) == carwash_class_id
         assert id(module.device.Carwash.Meta) == carwash_meta_class_id
@@ -917,7 +917,7 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module", "Delete: Class: module.Carwash.Meta"
+            "Update Module: module", "Delete Class: module.Carwash.Meta"
         )
 
         assert not hasattr(module.device.Carwash, "Meta")
@@ -977,9 +977,9 @@ class TestClasses(utils.TestBase):
         reloader.reload(car)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.car",
-            "Add: Class: sandbox.car.NameType",
-            "Add: Reference: sandbox.car.SuperCarwash.name_type",
+            "Update Module: sandbox.car",
+            "Add Class: sandbox.car.NameType",
+            "Add Reference: sandbox.car.SuperCarwash.name_type",
         )
 
         reloader.rollback()
@@ -1024,7 +1024,7 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(cupcake)
 
-        reloader.assert_actions('Update: Module: sandbox.cupcake')
+        reloader.assert_actions('Update Module: sandbox.cupcake')
 
     def test_method_with_list_comprehensions_twice(self, sandbox):
         reloader = Reloader(sandbox)
@@ -1053,12 +1053,12 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            'Update: Module: module', 'Update: Method: module.Cupcake.eat',
+            'Update Module: module', 'Update Method: module.Cupcake.eat',
         )
 
         reloader.reload(module)
         reloader.assert_actions(
-            'Update: Module: module',
+            'Update Module: module',
         )
 
     def test_method_not_changed_should_not_reload(self, sandbox):
@@ -1083,10 +1083,10 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module')
+        reloader.assert_actions('Update Module: module')
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module')
+        reloader.assert_actions('Update Module: module')
 
     def test_add_method_closure(self, sandbox):
         reloader = Reloader(sandbox)
@@ -1114,7 +1114,7 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions('Update: Module: module', 'Update: Method: module.Cupcake.eat')
+        reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating very sweet cupcake"
 
@@ -1149,7 +1149,7 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions('Update: Module: module', 'Update: Method: module.Cupcake.eat')
+        reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating super sweet cupcake"
 
@@ -1176,7 +1176,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Add: Method: module.Cake.fun')
+        reloader.assert_actions('Update Module: module', 'Add Method: module.Cake.fun')
         assert module.device.Cake.fun(5) == 25
 
         reloader.rollback()
@@ -1202,7 +1202,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Update: Method: module.Cake.fun')
+        reloader.assert_actions('Update Module: module', 'Update Method: module.Cake.fun')
         assert module.device.Cake.fun(5) == 25
 
         reloader.rollback()
@@ -1232,7 +1232,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Add: StaticMethod: module.Cake.eat')
+        reloader.assert_actions('Update Module: module', 'Add StaticMethod: module.Cake.eat')
         assert module.device.Cake.eat() == "Eating"
 
         reloader.rollback()
@@ -1262,39 +1262,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Update: StaticMethod: module.Cake.eat')
-        assert module.device.Cake.eat() == "Eating fast"
-
-        reloader.rollback()
-        module.assert_not_changed()
-
-        assert module.device.Cake.eat() == "Eating"
-
-    def test_edit_staticmethod(self, sandbox):
-        reloader = Reloader(sandbox)
-
-        module = Module(
-            "module.py",
-            """
-        class Cake:
-            @staticmethod
-            def eat():
-                return "Eating"
-        """,
-        )
-
-        module.load()
-        module.rewrite(
-            """
-        class Cake:
-            @staticmethod
-            def eat():
-                return "Eating fast"
-        """
-        )
-
-        reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'Update: StaticMethod: module.Cake.eat')
+        reloader.assert_actions('Update Module: module', 'Update StaticMethod: module.Cake.eat')
         assert module.device.Cake.eat() == "Eating fast"
 
         reloader.rollback()

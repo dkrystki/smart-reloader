@@ -41,7 +41,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'DeepUpdate: Method: module.Cupcake.eat')
+        reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating round cupcake"
         assert module.device.Cupcake.eat() == "Eating round cupcake"
@@ -86,7 +86,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'DeepUpdate: Method: module.Cupcake.eat')
+        reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating a beautiful cupcake"
         assert module.device.Cupcake.eat() == "Eating a beautiful cupcake"
@@ -131,7 +131,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'DeepUpdate: StaticMethod: module.Cupcake.eat')
+        reloader.assert_actions('Update Module: module', 'Update StaticMethod: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating red cupcake"
         assert module.device.cupcake.eat() == "Eating blue cupcake"
@@ -199,7 +199,7 @@ class TestClassesDeepReload(utils.TestBase):
 
         # assert_not_reloaded()
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'DeepUpdate: ClassMethod: module.Cupcake.eat')
+        reloader.assert_actions('Update Module: module', 'Update ClassMethod: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating red cupcake"
         # assert fun1(module.device.Cupcake()) == "Eating red cupcake"
@@ -246,7 +246,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: module', 'DeepUpdate: Method: module.Cupcake.how_many_eat')
+        reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.how_many_eat')
 
         assert module.device.Cupcake().how_many_eat() == 11
 

@@ -2,7 +2,7 @@ import sys
 import types
 from collections import defaultdict
 from types import ModuleType
-from typing import DefaultDict, Dict, Set, List
+from typing import DefaultDict, Dict, Set, List, Callable, Optional
 import time
 
 
@@ -21,11 +21,15 @@ from importlib.machinery import FileFinder
 from importlib import invalidate_caches
 from importlib.machinery import SourceFileLoader
 
+post_module_exec_hook: Optional[Callable] = None
+
 class MyLoader(SourceFileLoader):
     def exec_module(self, module: types.ModuleType) -> None:
         init_import(module)
         super().exec_module(module)
         post_import(module)
+        if post_module_exec_hook:
+            post_module_exec_hook(module)
 
 
 once = False

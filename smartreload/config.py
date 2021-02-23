@@ -1,7 +1,7 @@
 from pathlib import Path
+from types import ModuleType
 from typing import TYPE_CHECKING, List
 
-from smartreload.partialreloader import FullReloadNeeded
 
 if TYPE_CHECKING:
     from smartreload.partialreloader import Action
@@ -39,3 +39,6 @@ class BaseConfig:
     @property
     def watched_paths(self) -> List[str]:
         return ["**/*.py"]
+
+    def plugins(self) -> List[ModuleType]:
+        return []

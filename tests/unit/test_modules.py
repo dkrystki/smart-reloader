@@ -42,8 +42,8 @@ class TestModules(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.module",
-            "Update: Variable: sandbox.module.global_var",
+            "Update Module: sandbox.module",
+            "Update Variable: sandbox.module.global_var",
         )
 
         assert module.device.global_var == 5
@@ -74,7 +74,7 @@ class TestModules(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_actions("Update: Module: module", "Add: Import: module.math")
+        reloader.assert_actions("Update Module: module", "Add Import: module.math")
 
         module.assert_obj_in("math")
 
@@ -105,7 +105,7 @@ class TestModules(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: module",
+            "Update Module: module",
         )
 
         module.assert_obj_in("math")
@@ -153,7 +153,7 @@ class TestModules(utils.TestBase):
         reloader.reload(master)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.master", "Add: Import: sandbox.master.slave"
+            "Update Module: sandbox.master", "Add Import: sandbox.master.slave"
         )
 
         master.assert_obj_in("slave")
@@ -201,9 +201,9 @@ class TestModules(utils.TestBase):
         reloader.rollback()
 
         reloader.assert_actions(
-            "Update: Module: sandbox.module",
-            "Update: Variable: sandbox.module.global_var",
-            "Update: Module: sandbox.slave_module",
+            "Update Module: sandbox.module",
+            "Update Variable: sandbox.module.global_var",
+            "Update Module: sandbox.slave_module",
         )
 
         assert module.device.global_var == 2
@@ -253,7 +253,7 @@ class TestModules(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.module", "Add: Variable: sandbox.module.Optional"
+            "Update Module: sandbox.module", "Add Variable: sandbox.module.Optional"
         )
 
         reloader.rollback()
@@ -305,11 +305,11 @@ class TestModules(utils.TestBase):
         reloader.reload(slave_module)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.module",
-            "Update: Module: sandbox.slave_module",
-            "Update: All: sandbox.slave_module.__all__",
-            "Add: Variable: sandbox.module.tesla_car_2",
-            "Add: Variable: sandbox.module.tesla_car_3",
+            "Update Module: sandbox.module",
+            "Update Module: sandbox.slave_module",
+            "Update All: sandbox.slave_module.__all__",
+            "Add Variable: sandbox.module.tesla_car_2",
+            "Add Variable: sandbox.module.tesla_car_3",
             ignore_order=True,
         )
 
@@ -362,11 +362,11 @@ class TestModules(utils.TestBase):
         reloader.reload(slave_module)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.module",
-            "Update: Module: sandbox.slave_module",
-            "Add: All: sandbox.slave_module.__all__",
-            "Delete: Variable: sandbox.module.tesla_car_2",
-            "Delete: Variable: sandbox.module.tesla_car_3",
+            "Update Module: sandbox.module",
+            "Update Module: sandbox.slave_module",
+            "Add All: sandbox.slave_module.__all__",
+            "Delete Variable: sandbox.module.tesla_car_2",
+            "Delete Variable: sandbox.module.tesla_car_3",
             ignore_order=True,
         )
 
@@ -420,11 +420,11 @@ class TestModules(utils.TestBase):
         reloader.reload(slave_module)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.module",
-            "Update: Module: sandbox.slave_module",
-            "Delete: All: sandbox.slave_module.__all__",
-            "Add: Variable: sandbox.module.tesla_car_2",
-            "Add: Variable: sandbox.module.tesla_car_3",
+            "Update Module: sandbox.module",
+            "Update Module: sandbox.slave_module",
+            "Delete All: sandbox.slave_module.__all__",
+            "Add Variable: sandbox.module.tesla_car_2",
+            "Add Variable: sandbox.module.tesla_car_3",
             ignore_order=True,
         )
 
@@ -478,8 +478,8 @@ class TestModules(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.module",
-            "Delete: Variable: sandbox.module.tesla_car_1",
+            "Update Module: sandbox.module",
+            "Delete Variable: sandbox.module.tesla_car_1",
         )
 
         module.assert_obj_not_in("tesla_car_1")
@@ -528,10 +528,10 @@ class TestModules(utils.TestBase):
         reloader.reload(slave_module)
 
         reloader.assert_actions(
-            "Update: Module: sandbox.slave_module",
-            "Add: Variable: sandbox.slave_module.tesla_car_2",
-            "Update: Module: sandbox.module",
-            "Add: Variable: sandbox.module.tesla_car_2",
+            "Update Module: sandbox.slave_module",
+            "Add Variable: sandbox.slave_module.tesla_car_2",
+            "Update Module: sandbox.module",
+            "Add Variable: sandbox.module.tesla_car_2",
         )
 
         module.assert_obj_in("tesla_car_1")
@@ -579,8 +579,8 @@ class TestModules(utils.TestBase):
 
         reloader.reload(slave_module)
 
-        reloader.assert_actions('Update: Module: sandbox.slave_module',
-                                'Add: Variable: sandbox.slave_module.tesla_car_2')
+        reloader.assert_actions('Update Module: sandbox.slave_module',
+                                'Add Variable: sandbox.slave_module.tesla_car_2')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -631,15 +631,15 @@ class TestModules(utils.TestBase):
 
         module.replace("from .slave_module_2 import *", "")
         reloader.reload(module)
-        reloader.assert_actions('Update: Module: sandbox.module',
-                                 'Delete: Variable: sandbox.module.car_2')
+        reloader.assert_actions('Update Module: sandbox.module',
+                                 'Delete Variable: sandbox.module.car_2')
         module.assert_obj_in("car_1")
         module.assert_obj_not_in("car_2")
 
         slave_module_2.append("car_3 = 'Model X'")
         reloader.reload(slave_module_2)
-        reloader.assert_actions('Update: Module: sandbox.slave_module_2',
-                                 'Add: Variable: sandbox.slave_module_2.car_3')
+        reloader.assert_actions('Update Module: sandbox.slave_module_2',
+                                 'Add Variable: sandbox.slave_module_2.car_3')
 
         module.assert_obj_in("car_1")
         module.assert_obj_not_in("car_2")

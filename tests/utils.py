@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from logging import getLogger
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 
 import pytest
 
@@ -15,7 +15,7 @@ import smartreload
 
 logger = getLogger(__name__)
 
-from smartreload import dependency_watcher
+from smartreload import dependency_watcher, misc
 
 
 def load_module(name: str) -> Any:
@@ -109,12 +109,45 @@ class Module:
 
 
 @dataclass
+class Config:
+    plugins: List[str] = field(default_factory=list)
+
+    filename = Path("smartreloader_config.py")
+
+    def __post_init__(self) -> None:
+        self._render()
+
+    def _render(self) -> None:
+        plugins_str = ", ".join([p for p in self.plugins])
+
+        code = f"""
+        from types import ModuleType
+        from typing import List
+
+        from smartreload import BaseConfig, smart_django, smart_pandas
+
+        class Config(BaseConfig):
+            def plugins(self) -> List[ModuleType]:
+                return [{plugins_str}]
+
+        """
+        self.filename.touch()
+        self.filename.write_text(dedent(code))
+
+
+@dataclass
 class Reloader:
     root: Path
     device: smartreload.PartialReloader = field(init=False, default=None)
+    config: Optional[Config] = None
 
     def __post_init__(self):
-        self.device = smartreload.PartialReloader(self.root, logger)
+        if self.config:
+            config = misc.import_from_file(self.config.filename, self.config.filename.parent, "test_config").Config()
+        else:
+            config = smartreload.BaseConfig()
+
+        self.device = smartreload.PartialReloader(self.root, logger, config)
 
     def reload(self, module: Module) -> None:
         self.device.reload(module.path)
@@ -128,3 +161,4 @@ class Reloader:
             assert actions_str == actions
         else:
             assert sorted(actions_str) == sorted(actions)
+
