@@ -8,6 +8,7 @@ import ast
 import re
 import sys
 import threading
+from abc import ABC
 from collections import OrderedDict, defaultdict
 from copy import copy
 from threading import Thread
@@ -52,10 +53,21 @@ def equal(a: Any, b: Any) -> bool:
     return ret
 
 
+def compare_django_fields(left: Any, right: Any):
+    return left.field.blank == right.field.blank
+
+
+def compare_django_descriptors(left: Any, right: Any):
+    return left.field.blank == right.field.blank
+
+
 equals: Dict[str, Callable] = defaultdict(lambda: equal)
 equals["pandas.core.series.Series"] = lambda a, b: a.equals(b)
 equals["pandas.DataFrame"] = lambda a, b: a.equals(b)
 equals["pandas.core.frame.DataFrame"] = lambda a, b: a.equals(b)
+equals["pandas.core.frame.DataFrame"] = lambda a, b: a.equals(b)
+equals['django.db.models.query_utils.DeferredAttribute'] = compare_django_fields
+equals["django.db.models.fields.related_descriptors.ForwardManyToOneDescriptor"] = compare_django_descriptors
 
 
 class FullReloadNeeded(Exception):
@@ -90,7 +102,7 @@ class Action(BaseAction):
 
 
 @dataclass
-class Object:
+class Object(ABC):
     @dataclass
     class Add(Action):
         parent: "ContainerObj"
@@ -152,7 +164,6 @@ class Object:
         def rollback(self) -> None:
             super().rollback()
 
-
     @dataclass
     class Delete(Action):
         parent: Optional["ContainerObj"]
@@ -168,19 +179,49 @@ class Object:
             super().rollback()
             self.parent.set_attr(self.obj.name, self.obj.python_obj)
 
+    @dataclass
+    class Candidates:
+        rank: int
+        content: Dict[str, "Object"]
+
+        def __repr__(self) -> str:
+            return repr(self.content)
+
     python_obj: Any
-    reloader: "PartialReloader"
     name: Optional[str]
-    module: Optional["Module"]
     parent: Optional["ContainerObj"]
+    module: Optional["Module"]
+    reloader: "PartialReloader"
 
     def __post_init__(self) -> None:
         self.module.register_obj(self)
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        raise NotImplementedError()
+
+    @classmethod
+    def get_candidates(cls, name: str, obj: Any, potential_parent: "ContainerObj",
+                       module: "Module", reloader: "PartialReloader") -> Optional["Object.Candidates"]:
+        if cls.is_candidate(name=name, obj=obj, potential_parent=potential_parent):
+            return cls.Candidates(rank=cls.get_rank(),
+                                   content={name: cls(python_obj=obj, name=name, parent=potential_parent,
+                                                                 reloader=reloader, module=module)})
+        else:
+            return None
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 1
 
     @property
     def bare_name(self) -> str:
         ret = self.full_name.split(".")[-1]
         return ret
+
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        raise NotImplementedError()
 
     def get_update_actions_for_not_equal(self, new_obj: "Object") -> List["BaseAction"]:
         if self.reloader.compare_objs(self, new_obj):
@@ -277,17 +318,6 @@ class Object:
         except AttributeError:
             return self.python_obj.__class__.__name__
 
-    @classmethod
-    def _is_ignored(cls, name: str) -> bool:
-        name = str(name)
-        if name == "__all__":
-            return False
-
-        if name.startswith("__") and name.endswith("__"):
-            return True
-
-        return name in ["None"]
-
     @property
     def source(self) -> str:
         try:
@@ -301,7 +331,8 @@ class Object:
         ret = []
 
         obj = self
-        while obj.parent:
+        # while not root
+        while obj.parent is not self.parent:
             ret.append(obj.parent)
             obj = obj.parent
 
@@ -341,7 +372,8 @@ class Object:
 
         return ret
 
-    def is_primitive(self, obj: Any) -> bool:
+    @staticmethod
+    def is_primitive(obj: Any) -> bool:
         if obj is None:
             return True
 
@@ -379,7 +411,7 @@ class Object:
 
 
 @dataclass
-class FinalObj(Object):
+class FinalObj(Object, ABC):
     def get_fixed_reference(self, module: "Module") -> Any:
         python_obj = copy(self.python_obj)
         if not self.is_foreign_obj(self.python_obj) and not self.is_primitive(
@@ -399,6 +431,19 @@ class Reference(FinalObj):
     def get_fixed_reference(self, module: "Module") -> Any:
         ret = self.get_python_obj_from_module(self.python_obj, module)
         return ret
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = potential_parent.module.is_already_processed(obj) and not Object.is_primitive(obj)
+        return ret
+
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [ContainerObj]
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 100
 
 
 @dataclass
@@ -503,6 +548,19 @@ class Function(FinalObj):
             for o in self.rollback_operations:
                 o.execute()
 
+    @classmethod
+    def get_rank(cls) -> int:
+        return 20
+
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Module]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = inspect.isfunction(obj)
+        return ret
+
     def get_actions_for_update(self, new_obj: "Function") -> List["BaseAction"]:
         wrapped = self.extract_wrapped(new_obj.get_func(new_obj.python_obj)) or self.extract_wrapped(self.get_func(self.python_obj))
         if type(self.python_obj) != type(new_obj.python_obj) or wrapped:
@@ -594,23 +652,6 @@ class Function(FinalObj):
         ret = dedent(ret)
         return ret
 
-    # @property
-    # def source(self) -> str:
-    #     try:
-    #         ret = inspect.getsource(self.get_func(self.python_obj))
-    #         ret = dedent(ret)
-    #     except (TypeError, OSError):
-    #         return ""
-    #
-    #     if (
-    #         isinstance(self.parent, Dictionary)
-    #         and self.python_obj.__name__ == "<lambda>"
-    #     ):
-    #         ret = ret[ret.find(":") + 1 :]
-    #         ret = dedent(ret)
-    #
-    #     return ret
-
     def is_global(self) -> bool:
         ret = self.parent == self.module
         return ret
@@ -618,12 +659,6 @@ class Function(FinalObj):
     @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj
-
-    @classmethod
-    def _is_ignored(cls, name: str) -> bool:
-        ret = name in ["__mro_override__", "__update_mro__"]
-
-        return ret
 
     def update_first_line_number(self, new_line_number: int) -> None:
         args_order = [
@@ -658,8 +693,14 @@ class PropertyGetter(Function):
     def get_func(cls, obj: Any) -> Any:
         return obj.fget
 
-    def equal(self, other: "Function") -> bool:
-        return super().equal(other)
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Class]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = isinstance(obj, property) and obj.fget
+        return ret
 
 
 class PropertySetter(Function):
@@ -667,12 +708,23 @@ class PropertySetter(Function):
     def get_func(cls, obj: Any) -> Any:
         return obj.fset
 
-    def equal(self, other: "Function") -> bool:
-        return super().equal(other)
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Class]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = isinstance(obj, property) and obj.fset
+        return ret
+
+    @classmethod
+    def get_candidates(cls, name: str, obj: Any, potential_parent: "ContainerObj", module: "Module",
+                       reloader: "PartialReloader") -> Optional["Object.Candidates"]:
+        return super().get_candidates(name + "__setter__", obj, potential_parent, module, reloader)
 
 
 @dataclass
-class ContainerObj(Object):
+class ContainerObj(Object, ABC):
     children: Dict[str, "Object"] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -685,26 +737,20 @@ class ContainerObj(Object):
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
         return False
 
-    def _python_obj_to_obj_classes(
-        self, name: str, obj: Any
-    ) -> Dict[str, Type[Object]]:
-        if self.module:
-            if id(obj) in self.module.python_obj_to_objs and not self.is_primitive(obj):
-                return {name: Reference}
+    def _get_candidate(self, name: str, obj: Any) -> Optional[Object.Candidates]:
+        all_candidates = []
+        for c in self.get_child_classes():
+            candidates = c.get_candidates(name, obj, potential_parent=self, module=self.module,
+                                               reloader=self.reloader)
+            if not candidates:
+                continue
+            all_candidates.append(candidates)
 
-        if inspect.isclass(obj) and not self.is_foreign_obj(obj):
-            # if the name is different that the class name it means it's just a reference not actualy class definition
-            if name != obj.__name__:
-                return {name: Reference}
-            return {name: Class}
+        candidates = sorted(all_candidates, key=lambda x: x.rank)
+        if candidates:
+            return candidates[-1]
 
-        if inspect.isfunction(obj):
-            return {name: Function}
-
-        if isinstance(obj, dict):
-            return {name: Dictionary}
-
-        return {}
+        return None
 
     def _collect_children(self) -> None:
         for n, o in self.get_dict().items():
@@ -715,19 +761,17 @@ class ContainerObj(Object):
             if any(o is p for p in self.get_parents_obj_flat() + [self.python_obj]):
                 continue
 
-            obj_classes = self._python_obj_to_obj_classes(n, o)
+            candidate = self._get_candidate(name=n, obj=o)
+            if candidate:
+                self.children.update(candidate.content)
 
-            if not obj_classes:
-                continue
+    def get_child_classes(self) -> List[Type["Object"]]:
+        ret = []
+        for c in self.reloader.object_classes:
+            if c.get_parent_classes() and any(issubclass(self.__class__, pc) for pc in c.get_parent_classes()):
+                ret.append(c)
 
-            for n, obj_class in obj_classes.items():
-                if obj_class._is_ignored(n):
-                    continue
-                obj = obj_class(
-                    o, parent=self, name=n, reloader=self.reloader, module=self.module
-                )
-                self.children[n] = obj
-        pass
+        return ret
 
     @property
     def source(self) -> str:
@@ -801,6 +845,30 @@ class Class(ContainerObj):
             else:
                 exec(source, self.parent.module.python_obj.__dict__)
 
+    def _is_child_ignored(self, name: str, obj: Any) -> bool:
+        if name == "__all__":
+            return False
+
+        full_name = f"{self.full_name_without_module_name}.{name}" if self.full_name_without_module_name else name
+
+        if full_name not in self.module.module_descriptor.source.flat_syntax:
+            return True
+
+        return False
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 30
+
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Class, Module]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = inspect.isclass(obj) and name == obj.__name__
+        return ret
+
     def __post_init__(self):
         super().__post_init__()
 
@@ -810,17 +878,7 @@ class Class(ContainerObj):
         else:
             raise FullReloadNeeded()
 
-    def _is_child_ignored(self, name: str, obj: Any) -> bool:
-        full_name = f"{self.full_name_without_module_name}.{name}"
-
-        if full_name not in self.module.module_descriptor.source.flat_syntax:
-            return True
-
-        return False
-
     def get_dict(self) -> "OrderedDict[str, Any]":
-        # members = inspect.getmembers(self.python_obj)
-        # ret = OrderedDict(sorted(members))
         ret = OrderedDict(self.python_obj.__dict__)
 
         return ret
@@ -828,31 +886,6 @@ class Class(ContainerObj):
     def _python_obj_to_obj_classes(
         self, name: str, obj: Any
     ) -> Dict[str, Type[Object]]:
-        # If already process means it's just a reference
-        if id(obj) in self.reloader.obj_to_modules and not self.is_primitive(obj):
-            return {name: Reference}
-
-        if isinstance(obj, classmethod):
-            return {name: ClassMethod}
-
-        if isinstance(obj, staticmethod):
-            return {name: StaticMethod}
-
-        if inspect.isfunction(obj):
-            return {name: Method}
-
-        ret = super()._python_obj_to_obj_classes(name, obj)
-        if ret:
-            return ret
-
-        if isinstance(obj, property):
-            ret = {name: PropertyGetter}
-
-            if obj.fset:
-                setter_name = name + "__setter__"
-                ret[setter_name] = PropertySetter
-            return ret
-
         return {name: ClassVariable}
 
     def get_actions_for_add(
@@ -886,6 +919,18 @@ class Method(Function):
 
             fun, code = self.new_obj.get_fixed_fun(self.obj, self.parent)
             self.obj.get_func(self.obj.python_obj).__code__ = code
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 10
+
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Class]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        return inspect.isfunction(obj)
 
     @classmethod
     def get_func(cls, obj: Any) -> Any:
@@ -953,8 +998,21 @@ class Method(Function):
 @dataclass
 class ClassMethod(Function):
     @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Class]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = isinstance(obj, classmethod)
+        return ret
+
+    @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj.__func__
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 10
 
     def equal(self, other: "Function") -> bool:
         ret = self.source == other.source
@@ -964,8 +1022,21 @@ class ClassMethod(Function):
 @dataclass
 class StaticMethod(Function):
     @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Class]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = isinstance(obj, staticmethod)
+        return ret
+
+    @classmethod
     def get_func(cls, obj: Any) -> Any:
         return obj.__func__
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 10
 
     def equal(self, other: "Function") -> bool:
         ret = self.source == other.source
@@ -974,6 +1045,19 @@ class StaticMethod(Function):
 
 @dataclass
 class Dictionary(ContainerObj):
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [ContainerObj]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = isinstance(obj, dict)
+        return ret
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 30
+
     def get_dict(self) -> "OrderedDict[str, Any]":
         return self.python_obj
 
@@ -994,11 +1078,37 @@ class Dictionary(ContainerObj):
 
 @dataclass
 class Variable(FinalObj):
-    pass
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Module]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        if name.startswith("__") and name.endswith("__"):
+            return False
+
+        return True
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 5
 
 
 @dataclass
 class All(FinalObj):
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Module]
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = name == "__all__"
+        return ret
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 30
+
     def get_actions_for_update(self, new_obj: "All") -> List["BaseAction"]:
         if new_obj.python_obj == self.python_obj:
             return []
@@ -1015,21 +1125,38 @@ class All(FinalObj):
 @dataclass
 class ClassVariable(Variable):
     @classmethod
-    def _is_ignored(cls, name: str) -> bool:
-        if name.startswith("__") and name.endswith("__"):
-            return True
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Class]
 
-        ret = name in [
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        if name.startswith("__") and name.endswith("__"):
+            return False
+
+        if name in [
             "_abc_generic_negative_cache",
             "_abc_registry",
             "_abc_cache",
-        ]
+        ]:
+            return False
 
-        return ret
+        return True
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 5
 
 
 @dataclass
 class DictionaryItem(FinalObj):
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        return True
+
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Dictionary]
+
     def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
         ret = []
         ret.extend(self.get_update_actions_for_not_equal(new_obj))
@@ -1048,6 +1175,15 @@ class Import(FinalObj):
             module = sys.modules.get(self.obj.name, self.obj.python_obj)
             setattr(self.parent.python_obj, self.obj.name, module)
 
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = inspect.ismodule(obj)
+        return ret
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return 30
+
     def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
         return []
 
@@ -1058,19 +1194,13 @@ class Import(FinalObj):
     #     ret.extend(self.get_actions_for_dependent_modules())
     #     return ret
 
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return [Module]
+
     def get_actions_for_delete(
         self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"
     ) -> List["BaseAction"]:
-        return []
-
-
-@dataclass
-class Frame(Object):
-    class Update(Object.Update):
-        def execute(self) -> None:
-            pass
-
-    def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
         return []
 
 
@@ -1079,28 +1209,34 @@ class Source:
     path: Path
     content: str = field(init=False)
     syntax: ast.AST = field(init=False)
-    flat_syntax: Dict[str, ast.AST] = field(init=False)
+    flat_syntax: List[str] = field(init=False)
 
     def __post_init__(self) -> None:
         self.content = self.path.read_text()
         self.syntax = ast.parse(self.content, str(self.path))
-        self.flat_syntax = self._get_flat_syntax(self.syntax, parent="")
+        self.flat_syntax = []
+        self._get_flat_names(self.syntax, parent="", ret=self.flat_syntax)
         pass
 
     def fetch_source(self):
         self.source = Source(self.path)
 
-    def _get_flat_syntax(self, syntax: ast.AST, parent: str) -> Dict[str, ast.AST]:
-        ret = {}
-
+    def _get_flat_names(self, syntax: ast.AST, parent: str, ret: List[str]):
         for child in ast.iter_child_nodes(syntax):
+            name = None
             if hasattr(child, "name"):
-                namespaced_name = child.name if not parent else f"{parent}.{child.name}"
-                ret[namespaced_name] = type(child)
-                ret.update(self._get_flat_syntax(child, namespaced_name))
+                name = child.name
+
+            if hasattr(child, "s"):
+                name = child.s
+
+            if name:
+                namespaced_name = name if not parent else f"{parent}.{name}"
+                ret.append(namespaced_name)
+                self._get_flat_names(child, namespaced_name, ret)
 
             if hasattr(child, "body") and type(child) is not ast.FunctionDef:
-                ret.update(self._get_flat_syntax(child, parent))
+                self._get_flat_names(child, parent, ret)
 
             if type(child) in [ast.Assign, ast.AnnAssign]:
                 targets = child.targets if hasattr(child, "targets") else [child.target]
@@ -1108,12 +1244,12 @@ class Source:
                 for t in targets:
                     if type(t) is ast.Name:
                         namespaced_name = t.id if not parent else f"{parent}.{t.id}"
-                        ret[namespaced_name] = type(child.value)
+                        ret.append(namespaced_name)
+                        if isinstance(child.value, ast.Dict):
+                            self._get_flat_names(child.value, namespaced_name, ret)
                     elif type(t) is ast.Attribute:
                         namespaced_name = f"{t.value}.{t.attr}" if not parent else f"{parent}.{t.value}.{t.attr}"
-                        ret[namespaced_name] = type(child.value)
-
-        return ret
+                        ret.append(namespaced_name)
 
 
 @dataclass
@@ -1127,12 +1263,17 @@ class Module(ContainerObj):
     def __post_init__(self) -> None:
         self.python_obj = self.module_descriptor.module
         self.name = self.module_descriptor.name
+        self.parent = None
         self.module = self
         self._collect_children()
 
-    def _collect_children(self) -> None:
-        super()._collect_children()
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        return False
 
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["Object"]]:
+        return []
 
     @property
     def file(self) -> Path:
@@ -1142,15 +1283,9 @@ class Module(ContainerObj):
     def _python_obj_to_obj_classes(
         self, name: str, obj: Any
     ) -> Dict[str, Type[Object]]:
-        if name == "__all__":
-            return {name: All}
-
         ret = super()._python_obj_to_obj_classes(name, obj)
         if ret:
             return ret
-
-        if inspect.ismodule(obj):
-            return {name: Import}
 
         return {name: Variable}
 
@@ -1161,16 +1296,8 @@ class Module(ContainerObj):
     def _is_ignored(cls, name: str) -> bool:
         return False
 
-    @property
-    def final_objs(self) -> List[FinalObj]:
-        """
-        Return non container objs
-        """
-        ret = []
-        for o in self.children:
-            if not isinstance(o, FinalObj):
-                continue
-            ret.append(o)
+    def is_already_processed(self, obj: "Object") -> bool:
+        ret = id(obj) in [id(o.python_obj) for o in self.get_flat_repr().values()]
         return ret
 
     def register_obj(self, obj: Object) -> None:
@@ -1187,61 +1314,6 @@ class Module(ContainerObj):
 
         return ret
 
-    # def _collect_frames(self) -> None:
-    #     from _pydevd_bundle.pydevd_comm import get_global_debugger, CMD_SET_BREAK
-    #     from _pydevd_bundle.pydevd_additional_thread_info import set_additional_thread_info
-    #     from _pydevd_bundle.pydevd_constants import IS_JYTH_LESS25, IS_PYCHARM, get_thread_id, get_current_thread_id
-    #     from _pydevd_bundle.pydevd_custom_frames import CustomFramesContainer, custom_frames_container_init
-    #     debugger = get_global_debugger()
-    #
-    #     frames = sys._current_frames()
-    #
-    #     thread_id, stopped_frame = next(((thread_id, f) for thread_id, f in frames.items() if "do_wait_suspend" in f.f_code.co_name), None)
-    #     thread = threading._active.get(thread_id)
-    #
-    #     if not stopped_frame:
-    #         return
-    #
-    #     def get_actual_frame(frame: FrameType) -> Optional[FrameType]:
-    #         if frame is None:
-    #             return None
-    #         if frame.f_code.co_filename == str(self.file):
-    #             return frame
-    #
-    #         return get_actual_frame(frame.f_back)
-    #
-    #     actual_frame = get_actual_frame(stopped_frame)
-    #
-    #     # actual_frame.f_lineno = 84
-    #     back_frame = actual_frame.f_back
-    #
-    #     info = set_additional_thread_info(thread)
-    #
-    #     if back_frame is not None:
-    #         # steps back to the same frame (in a return call it will stop in the 'back frame' for the user)
-    #         info.pydev_step_stop = actual_frame
-    #         debugger.set_trace_for_frame_and_parents(actual_frame)
-    #
-    #     del actual_frame
-    #     cmd = debugger.cmd_factory.make_thread_run_message(thread_id, info.pydev_step_cmd)
-    #     debugger.writer.add_command(cmd)
-    #
-    #     # with CustomFramesContainer.custom_frames_lock:
-    #     #     The ones that remained on last_running must now be removed.
-    #         # for frame_id in from_this_thread:
-    #         #     print >> sys.stderr, 'Removing created frame: ', frame_id
-    #             # self.writer.add_command(self.cmd_factory.make_thread_killed_message(frame_id))
-    #
-    #     # debugger.set_next_statement(actual_frame, event="line", func_name="get_queryset", next_line=84)
-    #
-    #     #
-    #     # for i in range(1, 10):
-    #     #     try:
-    #     #         frame = sys._getframe(i)
-    #     #     except ValueError:
-    #     #         return
-    #     #     pass
-
 
 @dataclass
 class UpdateModule(BaseAction):
@@ -1255,9 +1327,10 @@ class UpdateModule(BaseAction):
 
     def execute(self, dry_run=False) -> None:
         old_module = Module(module_descriptor=self.module_descriptor,
-                            reloader=self.reloader, name=None,
+                            name=None,
                             python_obj=None,
                             parent=None,
+                            reloader=self.reloader,
                             module=None)
 
         trace = sys.gettrace()
@@ -1270,11 +1343,11 @@ class UpdateModule(BaseAction):
                                              module=module_obj)
         new_module = Module(
             module_descriptor=module_descriptor,
-            reloader=self.reloader,
             name=old_module.name,
             python_obj=None,
             parent=None,
-            module=None)
+            module=None,
+            reloader=self.reloader)
 
         actions = old_module.get_actions_for_update(new_module)
         actions.sort(key=lambda a: a.priority, reverse=True)
@@ -1376,141 +1449,6 @@ class Modules(dict):
 
 
 @dataclass
-class TrickyTypes:
-    @dataclass
-    class TrickyType:
-        type_: Type
-        ignore_fields: List[str]
-
-    reloader: "PartialReloader"
-    modules: Modules = field(init=False)
-    runner: Thread = field(init=False)
-    content: Dict[int, TrickyType] = field(init=False, default_factory=dict)
-
-    def __post_init__(self) -> None:
-        self.user_modules = self.reloader.modules.user_modules
-        self.runner = Thread(target=self._run)
-
-    def start(self):
-        self.runner.start()
-        # self._run()
-
-    def _run(self) -> None:
-        # wait until importing is done
-        while dependency_watcher.seconds_from_last_import() <= 1.0:
-            sleep(0.1)
-
-        for m in self.user_modules.keys():
-            self.collect_diffs_from_module(Path(m))
-
-    def python_obj_to_dict(self, obj, classkey=None, already_visited: Optional[List[Any]] = None, depth=0):
-        if not already_visited:
-            already_visited = []
-
-        if id(obj) in already_visited:
-            return obj
-
-        if depth >= 1:
-            return obj
-
-        already_visited.append(id(obj))
-
-        try:
-            if isinstance(obj, type):
-                return obj
-
-            if isinstance(obj, dict):
-                data = {}
-                for (k, v) in obj.items():
-                    data[k] = self.python_obj_to_dict(v, classkey, already_visited, depth+1)
-                return data
-            elif hasattr(obj, "__dict__"):
-                data = dict([(key, self.python_obj_to_dict(value, classkey, already_visited), depth+1)
-                             for key, value in dict(inspect.getmembers(obj)).items()
-                             if not callable(value)])
-                if classkey is not None and hasattr(obj, "__class__"):
-                    data[classkey] = obj.__class__.__name__
-                return data
-            else:
-                return obj
-        except Exception as e:
-            return obj
-
-    def flatten_dict(self, dictionary: Dict[str, Any], parent_key=False, separator='.') -> Dict[str, Any]:
-        """
-        Turn a nested dictionary into a flattened dictionary
-        :param dictionary: The dictionary to flatten
-        :param parent_key: The string to prepend to dictionary's keys
-        :param separator: The string used to separate flattened keys
-        :return: A flattened dictionary
-        """
-
-        items = []
-        for key, value in dictionary.items():
-            new_key = str(parent_key) + separator + key if parent_key else key
-            if isinstance(value, collections.MutableMapping):
-                if not value.items():
-                    items.append((new_key, None))
-                else:
-                    items.extend(self.flatten_dict(value, new_key, separator).items())
-            elif isinstance(value, list):
-                if len(value):
-                    for k, v in enumerate(value):
-                        items.extend(self.flatten_dict({str(k): v}, new_key).items())
-                else:
-                    items.append((new_key, None))
-            else:
-                items.append((new_key, value))
-        return dict(items)
-
-    def python_obj_to_flat_dict(self, python_obj: Any) -> Dict[str, Any]:
-        dictionary = python_obj.__dict__
-        return dictionary
-
-    def wait_until_finished(self) -> None:
-        while not self.finished():
-            sleep(0.1)
-
-    def finished(self) -> bool:
-        ret = not self.runner.is_alive()
-        return ret
-
-    def collect_diffs_from_module(self, module_file: Path) -> None:
-        self.reloader.reload(module_file, dry_run=True)
-        update_actions = [a for a in self.reloader.applied_actions if isinstance(a, Object.Update)]
-        self.reloader.reset()
-
-        for a in update_actions:
-            left = self.python_obj_to_flat_dict(a.obj.python_obj)
-            right = self.python_obj_to_flat_dict(a.new_obj.python_obj)
-
-            ignore_fields = set(left).symmetric_difference(set(right))
-
-            for k, v in left.items():
-                try:
-                    right_v = right[k]
-                except KeyError:
-                    continue
-                if v != right_v:
-                    ignore_fields.add(k)
-
-            self.content[id(type(a.obj.python_obj))] = self.TrickyType(type(a.obj.python_obj), ignore_fields=list(ignore_fields))
-        pass
-
-    def compare_tricky_objects(self, left: Object, right: Object) -> bool:
-        left_flat = self.python_obj_to_flat_dict(left.python_obj)
-        right_flat = self.python_obj_to_flat_dict(right.python_obj)
-
-        keys = set(left_flat.keys()) - set(self.content[id(type(left.python_obj))].ignore_fields)
-
-        for k in keys:
-            if left_flat[k] != right_flat[k]:
-                return False
-
-        return True
-
-
-@dataclass
 class PartialReloader:
     root: Path
     logger: Logger
@@ -1520,7 +1458,7 @@ class PartialReloader:
                                                               default_factory=lambda: defaultdict(set))
     applied_actions: List[BaseAction] = field(init=False, default_factory=list)
     modules: Modules = field(init=False)
-    tricky_types: TrickyTypes = field(init=False)
+    object_classes: List[Type[Object]] = field(init=False)
 
     def __post_init__(self) -> None:
         self.root = self.root.resolve()
@@ -1529,8 +1467,22 @@ class PartialReloader:
         self.modules = Modules(self, sys.modules)
         sys.modules = self.modules
         dependency_watcher.enable()
-        self.tricky_types = TrickyTypes(reloader=self)
-        self.tricky_types.start()
+
+        self._collect_object_classes()
+
+    def _collect_object_classes(self) -> None:
+        self.object_classes = []
+
+        for c in globals().values():
+            if not isinstance(c, type):
+                continue
+            if not issubclass(c, Object):
+                continue
+
+            if ABC in  c.__bases__:
+                continue
+
+            self.object_classes.append(c)
 
     def reset(self) -> None:
         self.named_obj_to_modules = defaultdict(set)
@@ -1593,7 +1545,4 @@ class PartialReloader:
         return equals[self.type](self.python_obj, other.python_obj)
 
     def compare_objs(self, left: Object, right: Object) -> bool:
-        if id(type(left.python_obj)) in self.tricky_types.content:
-            return self.tricky_types.compare_tricky_objects(left, right)
-
         return equals[left.type](left.python_obj, right.python_obj)

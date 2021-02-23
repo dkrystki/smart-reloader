@@ -79,11 +79,11 @@ class TenantsViewset(
     serializer_class = serializers.TenantSerializer
 
     def get_queryset(self):
-        a = 1
+        a = 11
         b = 2
         c = 3
         d = 4
-        e = 5
+        e = 51
         return super().get_queryset()
 
 
@@ -114,7 +114,7 @@ class EntryNoticeViewset(
         else:
             return super().retrieve(self)
 
-        a = 131
+        a = 1311
 
 
 class EntryNoticeSend(generics.GenericAPIView):
@@ -146,3 +146,4 @@ class AddressesViewset(
 ):
     queryset = models.Address.objects.all()
     serializer_class = serializers.AddressSerializer
+

@@ -188,3 +188,80 @@ class TestDictionaries(utils.TestBase):
 
         reloader.rollback()
         module.assert_not_changed()
+
+    def test_nested(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        cake_shop = {
+        "cakes": 200,
+        "cupcakes": 150,
+        "clients": {
+            "number": 100,
+            "growth_per_month": 10
+            }
+        }
+        """,
+        )
+
+        module.load()
+
+        def assert_not_reloaded():
+            assert module.device.cake_shop["clients"]["number"] == 100
+
+        assert_not_reloaded()
+
+        module.replace('"number": 100', '"number": 150')
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module',
+                                'Update: DictionaryItem: module.cake_shop.clients.number')
+
+        assert module.device.cake_shop["clients"]["number"] == 150
+
+        reloader.rollback()
+        assert_not_reloaded()
+        module.assert_not_changed()
+
+    def test_nested_add(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        cake_shop = {
+            "cakes": 200,
+            "cupcakes": 150,
+            "clients": None
+        }
+        """,
+        )
+
+        module.load()
+
+        def assert_not_reloaded():
+            assert module.device.cake_shop["clients"] is None
+
+        assert_not_reloaded()
+
+        module.rewrite("""
+        cake_shop = {
+            "cakes": 200,
+            "cupcakes": 150,
+            "clients": {
+                "number": 12,
+                "complains": 33 
+            }
+        }
+        """)
+
+        reloader.reload(module)
+        reloader.assert_actions('Update: Module: module', 'Update: DictionaryItem: module.cake_shop.clients')
+
+        assert module.device.cake_shop["clients"]["number"] == 12
+
+        reloader.rollback()
+        assert_not_reloaded()
+        module.assert_not_changed()
