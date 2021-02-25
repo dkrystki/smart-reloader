@@ -52,6 +52,8 @@ class TestDictionaries(utils.TestBase):
         
             cake_n: int
             shop_name: str = "Peanut butter heaven"
+            tuple1, tuple2 = ("test_name1", "test_name2")
+            
             data = {
                 "cakes": 200,
                 "cupcakes": 150,
@@ -73,14 +75,53 @@ class TestDictionaries(utils.TestBase):
         )
 
         source = Source(module.path)
-        assert source.flat_syntax == ['employee_number',
-                                     'cake_n',
-                                     'shop_name',
-                                     'data',
-                                     'data.cakes',
-                                     'data.cupcakes',
-                                     'data.clients',
-                                     'data.clients.number',
-                                     'data.clients.complains',
-                                     'data.10',
-                                     'data.time']
+        assert source.flat_syntax == ['global_name',
+                                      'first_name',
+                                      'second_name',
+                                      'CakeShop',
+                                      'CakeShop.Meta',
+                                      'CakeShop.Meta.employee_number',
+                                      'CakeShop.Meta.get_employee_number',
+                                      'CakeShop.cake_n',
+                                      'CakeShop.shop_name',
+                                      'CakeShop.tuple1',
+                                      'CakeShop.tuple2',
+                                      'CakeShop.data',
+                                      'CakeShop.data.cakes',
+                                      'CakeShop.data.cupcakes',
+                                      'CakeShop.data.clients',
+                                      'CakeShop.data.clients.number',
+                                      'CakeShop.data.clients.complains',
+                                      'CakeShop.data.10',
+                                      'CakeShop.data.time',
+                                      'CakeShop.__init__',
+                                      'CakeShop.open']
+
+    def test_lambdas(self, sandbox):
+        module = Module(
+            "module.py",
+            """
+        from typing import Callable
+        
+        global_name = lambda x: "Alison"
+
+        class CakeShop:
+            cake_n: Callable = lambda: 10
+            data = {
+                "cakes": lambda: 14,
+                "clients": {
+                    "number": lambda: 88
+                },
+            }
+
+        """,
+        )
+
+        source = Source(module.path)
+        assert source.flat_syntax == ['global_name',
+                                     'CakeShop',
+                                     'CakeShop.cake_n',
+                                     'CakeShop.data',
+                                     'CakeShop.data.cakes',
+                                     'CakeShop.data.clients',
+                                     'CakeShop.data.clients.number']

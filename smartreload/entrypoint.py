@@ -2,6 +2,8 @@ import os
 import subprocess
 import sys
 
+import signal
+
 from pathlib import Path
 from textwrap import dedent
 from threading import Thread
@@ -105,6 +107,27 @@ class SmartReload:
 
         self.remove_seed()
         proc = subprocess.Popen(["python", str(self.seed_file.name)])
+
+        def signal_handler(sig, frame):
+            proc.send_signal(sig)
+
+        signals_to_propagte = [signal.SIGHUP,
+                                signal.SIGINT,
+                                signal.SIGQUIT,
+                                signal.SIGILL,
+                                signal.SIGTRAP,
+                                signal.SIGABRT,
+                                signal.SIGBUS,
+                                signal.SIGFPE,
+                                signal.SIGUSR1,
+                                signal.SIGSEGV,
+                                signal.SIGUSR2,
+                                signal.SIGPIPE,
+                                signal.SIGALRM,
+                                signal.SIGTERM]
+        for s in signals_to_propagte:
+            signal.signal(s, signal_handler)
+
         proc.communicate()
 
 

@@ -435,7 +435,10 @@ class FinalObj(Object, ABC):
 @dataclass
 class Reference(FinalObj):
     def get_fixed_reference(self, module: "Module") -> Any:
-        ret = self.get_python_obj_from_module(self.python_obj, module)
+        if not self.is_primitive(self.python_obj):
+            ret = self.get_python_obj_from_module(self.python_obj, module)
+        else:
+            ret = self.python_obj
         return ret
 
     @classmethod
@@ -1235,88 +1238,103 @@ class Source:
     @dataclass
     class NamedNode:
         name: str
-        node: ast.AST
+        content: Optional[ast.AST]
+        parent: str
+
+        def __repr__(self) -> str:
+            return self.full_name
+
+        @property
+        def full_name(self) -> str:
+            ret = f"{self.parent}.{self.name}" if self.parent else self.name
+            return ret
+
+        @classmethod
+        def _get_ast_name(cls, node: ast.AST) -> Optional[str]:
+            if isinstance(node, ast.Str):
+                return node.s
+
+            if isinstance(node, ast.Num):
+                return node.n
+
+            if isinstance(node, ast.Name):
+                return node.id
+
+            if isinstance(node, ast.ClassDef):
+                return node.name
+
+            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+                return node.name
+
+            return None
+
+        def _get_child_nodes(self) -> List["Source.NamedNode"]:
+            if isinstance(self.content, ast.Module) or isinstance(self.content, ast.ClassDef):
+                return self._get_child_nodes_for_body()
+
+            if isinstance(self.content, ast.Dict):
+                return self._get_child_nodes_for_dict()
+
+            return []
+
+        def _get_child_nodes_for_body(self) -> List["Source.NamedNode"]:
+            nodes = []
+
+            for b in self.content.body:
+                if type(b) in [ast.Assign, ast.AnnAssign]:
+                    targets = b.targets if hasattr(b, "targets") else [b.target]
+                    for t in targets:
+                        if isinstance(t, ast.Tuple):
+                            for n in t.elts:
+                                nodes.append(Source.NamedNode(self._get_ast_name(n), b.value, self.full_name))
+                        else:
+                            nodes.append(Source.NamedNode(self._get_ast_name(t), b.value, self.full_name))
+
+                if isinstance(b, ast.ClassDef):
+                    nodes.append(Source.NamedNode(self._get_ast_name(b), b, self.full_name))
+                elif isinstance(b, ast.FunctionDef) or isinstance(b, ast.AsyncFunctionDef):
+                    nodes.append(Source.NamedNode(self._get_ast_name(b), None, self.full_name))
+
+            return nodes
+
+        def _get_child_nodes_for_dict(self) -> List["Source.NamedNode"]:
+            ret = []
+            for k, v in zip(self.content.keys, self.content.values):
+                ret.append(Source.NamedNode(self._get_ast_name(k), v, self.full_name))
+
+            return ret
+
+        def get_flat(self) -> List[str]:
+            ret = []
+            if self.full_name:
+                ret.append(self.full_name)
+
+            for n in self._get_child_nodes():
+                ret.extend(n.get_flat())
+
+            return ret
 
     def __post_init__(self) -> None:
         self.content = self.path.read_text()
         self.syntax = ast.parse(self.content, str(self.path))
         self.flat_syntax = []
-        self._get_flat_container_names(self.syntax, parent="", ret=self.flat_syntax)
+        self.flat_syntax = self._get_flat_container_names(self.syntax)
         pass
 
     def fetch_source(self):
         self.source = Source(self.path)
 
-    def _get_ast_name(self, node: ast.AST) -> Optional[str]:
-        if isinstance(node, ast.Str):
-            return node.s
-
-        if isinstance(node, ast.Num):
-            return node.n
-
-        if isinstance(node, ast.Name):
-            return node.id
-
-        if isinstance(node, ast.ClassDef):
-            return node.name
-
-        return None
-
-    def _get_nodes(self, node: ast.AST) -> List[NamedNode]:
-        if not hasattr(node, "body"):
-            return []
-
-        nodes = []
-
-        for b in node.body:
-            if type(b) in [ast.Assign, ast.AnnAssign]:
-                targets = node.targets if hasattr(node, "targets") else [node.target]
-                for t in targets:
-                    nodes.append(self.NamedNode(self._get_ast_name(t), node.value))
-
-            if isinstance(b, ast.Tuple):
-                for t in node.elts:
-                    nodes.append(self.NamedNode(self._get_ast_name(t), node.value))
-
-            if isinstance(b, ast.ClassDef):
-                nodes.append(self.NamedNode(self._get_ast_name(b), b.body))
-
-        return []
-
-    def _get_flat_dict_names(self, syntax: ast.AST, parent: str, ret: List[str]):
-        for k, v in zip(syntax.keys, syntax.values):
-            name = self._get_ast_names(k, parent)[0]
-            ret.append(name)
-
-            if isinstance(v, ast.Dict):
-                self._get_flat_dict_names(v, name, ret)
-
     def _get_namespaced_name(self, parent: str, name: str) -> str:
         return f"{parent}.{name}" if parent else name
 
-    def _get_flat_container_names(self, syntax: ast.AST, parent: str, ret: List[str]) -> None:
+    def _get_flat_container_names(self, syntax: ast.AST) -> List[str]:
         if not hasattr(syntax, "body"):
-            return
+            return []
 
-        nodes = self._get_nodes(syntax)
+        parent_node = self.NamedNode("", self.syntax, "")
+        ret = parent_node.get_flat()
+        return ret
 
-        for n in nodes:
-
-            if type(child) in [ast.Assign, ast.AnnAssign]:
-                targets = child.targets if hasattr(child, "targets") else [child.target]
-                for t in targets:
-                    for n in self._get_ast_names(t, parent):
-                        if isinstance(child.value, ast.Dict):
-                            self._get_flat_dict_names(child.value, n, ret)
-
-            # for n in names:
-            #     namespaced_name = n if not parent else f"{parent}.{n}"
-            #     ret.append(namespaced_name)
-
-            for n in names:
-                full_name = self._get_namespaced_name(parent, n)
-                if type(child) is ast.ClassDef:
-                    self._get_flat_container_names(child, full_name, ret)
 
             # if type(child) in [ast.Assign, ast.AnnAssign]:
             #     targets = child.targets if hasattr(child, "targets") else [child.target]

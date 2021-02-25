@@ -204,15 +204,13 @@ class TestGlobalVariable(utils.TestBase):
 
         reloader.reload(carwash)
 
-        reloader.assert_actions(
-            "Update Module: sandbox.carwash",
-            "Update Variable: sandbox.carwash.sprinkler_n",
-            "Update Module: sandbox.container",
-            "Update Variable: sandbox.container.sprinkler_n",
-            "Update Module: sandbox.car",
-            "Update Variable: sandbox.car.sprinkler_n",
-            "Update Variable: sandbox.car.car_sprinklers",
-        )
+        reloader.assert_actions('Update Module: sandbox.carwash',
+                                 'Update Variable: sandbox.carwash.sprinkler_n',
+                                 'Update Module: sandbox.container',
+                                 'Update Reference: sandbox.container.sprinkler_n',
+                                 'Update Module: sandbox.car',
+                                 'Update Reference: sandbox.car.sprinkler_n',
+                                 'Update Variable: sandbox.car.car_sprinklers')
 
         assert carwash.device.sprinkler_n == 6
         assert car.device.car_sprinklers == 2
