@@ -257,19 +257,12 @@ class Object(ABC):
         if not ret:
             return ret
 
-        if not self.is_foreign_obj(self.python_obj):
-            ret.extend(self.get_actions_for_dependent_modules())
+        ret.extend(self.get_actions_for_dependent_modules())
         return ret
 
-    def is_foreign_obj(self, obj: Any) -> bool:
-        if hasattr(obj, "__module__") and obj.__module__:
-            module_name = (
-                obj.__module__.replace(".py", "").replace("/", ".").replace("\\", ".")
-            )
-            if not module_name.endswith(self.module.name):
-                return True
-
-        return False
+    def is_obj_foreign(self, obj_full_name: str) -> bool:
+        ret = obj_full_name not in self.module.module_descriptor.source.flat_syntax
+        return ret
 
     def get_fixed_reference(self, module: "Module") -> Any:
         return self.python_obj
@@ -427,7 +420,7 @@ class Object(ABC):
 class FinalObj(Object, ABC):
     def get_fixed_reference(self, module: "Module") -> Any:
         python_obj = copy(self.python_obj)
-        if not self.is_foreign_obj(self.python_obj) and not self.is_primitive(
+        if not self.is_obj_foreign(self.full_name_without_module_name) and not self.is_primitive(
             self.python_obj
         ):
             fixed_reference_obj = self.get_python_obj_from_module(
@@ -447,7 +440,8 @@ class Reference(FinalObj):
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
-        ret = potential_parent.module.is_already_processed(obj) and not Object.is_primitive(obj)
+        full_name = potential_parent.get_full_name_for_child(name)
+        ret = potential_parent.module.is_already_processed(obj) and not Object.is_primitive(obj) or potential_parent.is_obj_foreign(full_name)
         return ret
 
     @classmethod
@@ -456,7 +450,7 @@ class Reference(FinalObj):
 
     @classmethod
     def get_rank(cls) -> int:
-        return 1e4
+        return int(1e4)
 
 
 @dataclass
@@ -484,7 +478,7 @@ class Function(FinalObj):
         new_obj: Optional["Function"]
 
         def execute(self) -> None:
-            self.obj.update_first_line_number(self.new_obj.python_obj.__code__.co_firstlineno)
+            self.obj.update_first_line_number(self.new_obj.get_func(self.new_obj.python_obj).__code__.co_firstlineno)
 
         def rollback(self) -> None:
             super().rollback()
@@ -663,6 +657,7 @@ class Function(FinalObj):
         ret = "".join(ret)
 
         ret = dedent(ret)
+        ret = ret.strip()
         return ret
 
     def is_global(self) -> bool:
@@ -674,6 +669,8 @@ class Function(FinalObj):
         return obj
 
     def update_first_line_number(self, new_line_number: int) -> None:
+        func = self.get_func(self.python_obj)
+
         args_order = [
             "co_argcount",
             "co_kwonlyargcount",
@@ -690,14 +687,14 @@ class Function(FinalObj):
             "co_lnotab",
             "co_freevars",
             "co_cellvars"]
-        kwargs = {k: getattr(self.python_obj.__code__, k) for k in args_order}
+        kwargs = {k: getattr(func.__code__, k) for k in args_order}
         kwargs["co_firstlineno"] = new_line_number
 
         code = CodeType(
             *kwargs.values()
         )
 
-        self.python_obj.__code__ = code
+        func.__code__ = code
 
 
 @dataclass
@@ -837,6 +834,10 @@ class ContainerObj(Object, ABC):
 
         return ret
 
+    def get_full_name_for_child(self, name: str) -> str:
+        ret = f"{self.full_name_without_module_name}.{name}" if self.full_name_without_module_name else name
+        return ret
+
 
 @dataclass
 class Class(ContainerObj):
@@ -859,9 +860,9 @@ class Class(ContainerObj):
         if name == "__all__":
             return False
 
-        full_name = f"{self.full_name_without_module_name}.{name}" if self.full_name_without_module_name else name
+        full_name = self.get_full_name_for_child(name)
 
-        if full_name not in self.module.module_descriptor.source.flat_syntax:
+        if self.is_obj_foreign(full_name):
             return True
 
         return False
@@ -1213,6 +1214,9 @@ class Import(FinalObj):
     ) -> List["BaseAction"]:
         return []
 
+    @classmethod
+    def get_rank(cls) -> int:
+        return int(2e4)
 
 @dataclass
 class UserObject(Object, ABC):
@@ -1228,45 +1232,119 @@ class Source:
     syntax: ast.AST = field(init=False)
     flat_syntax: List[str] = field(init=False)
 
+    @dataclass
+    class NamedNode:
+        name: str
+        node: ast.AST
+
     def __post_init__(self) -> None:
         self.content = self.path.read_text()
         self.syntax = ast.parse(self.content, str(self.path))
         self.flat_syntax = []
-        self._get_flat_names(self.syntax, parent="", ret=self.flat_syntax)
+        self._get_flat_container_names(self.syntax, parent="", ret=self.flat_syntax)
         pass
 
     def fetch_source(self):
         self.source = Source(self.path)
 
-    def _get_flat_names(self, syntax: ast.AST, parent: str, ret: List[str]):
-        for child in ast.iter_child_nodes(syntax):
-            name = None
-            if hasattr(child, "name"):
-                name = child.name
+    def _get_ast_name(self, node: ast.AST) -> Optional[str]:
+        if isinstance(node, ast.Str):
+            return node.s
 
-            if hasattr(child, "s"):
-                name = child.s
+        if isinstance(node, ast.Num):
+            return node.n
 
-            if name:
-                namespaced_name = name if not parent else f"{parent}.{name}"
-                ret.append(namespaced_name)
-                self._get_flat_names(child, namespaced_name, ret)
+        if isinstance(node, ast.Name):
+            return node.id
 
-            if hasattr(child, "body") and type(child) is not ast.FunctionDef:
-                self._get_flat_names(child, parent, ret)
+        if isinstance(node, ast.ClassDef):
+            return node.name
+
+        return None
+
+    def _get_nodes(self, node: ast.AST) -> List[NamedNode]:
+        if not hasattr(node, "body"):
+            return []
+
+        nodes = []
+
+        for b in node.body:
+            if type(b) in [ast.Assign, ast.AnnAssign]:
+                targets = node.targets if hasattr(node, "targets") else [node.target]
+                for t in targets:
+                    nodes.append(self.NamedNode(self._get_ast_name(t), node.value))
+
+            if isinstance(b, ast.Tuple):
+                for t in node.elts:
+                    nodes.append(self.NamedNode(self._get_ast_name(t), node.value))
+
+            if isinstance(b, ast.ClassDef):
+                nodes.append(self.NamedNode(self._get_ast_name(b), b.body))
+
+        return []
+
+    def _get_flat_dict_names(self, syntax: ast.AST, parent: str, ret: List[str]):
+        for k, v in zip(syntax.keys, syntax.values):
+            name = self._get_ast_names(k, parent)[0]
+            ret.append(name)
+
+            if isinstance(v, ast.Dict):
+                self._get_flat_dict_names(v, name, ret)
+
+    def _get_namespaced_name(self, parent: str, name: str) -> str:
+        return f"{parent}.{name}" if parent else name
+
+    def _get_flat_container_names(self, syntax: ast.AST, parent: str, ret: List[str]) -> None:
+        if not hasattr(syntax, "body"):
+            return
+
+        nodes = self._get_nodes(syntax)
+
+        for n in nodes:
 
             if type(child) in [ast.Assign, ast.AnnAssign]:
                 targets = child.targets if hasattr(child, "targets") else [child.target]
-
                 for t in targets:
-                    if type(t) is ast.Name:
-                        namespaced_name = t.id if not parent else f"{parent}.{t.id}"
-                        ret.append(namespaced_name)
+                    for n in self._get_ast_names(t, parent):
                         if isinstance(child.value, ast.Dict):
-                            self._get_flat_names(child.value, namespaced_name, ret)
-                    elif type(t) is ast.Attribute:
-                        namespaced_name = f"{t.value}.{t.attr}" if not parent else f"{parent}.{t.value}.{t.attr}"
-                        ret.append(namespaced_name)
+                            self._get_flat_dict_names(child.value, n, ret)
+
+            # for n in names:
+            #     namespaced_name = n if not parent else f"{parent}.{n}"
+            #     ret.append(namespaced_name)
+
+            for n in names:
+                full_name = self._get_namespaced_name(parent, n)
+                if type(child) is ast.ClassDef:
+                    self._get_flat_container_names(child, full_name, ret)
+
+            # if type(child) in [ast.Assign, ast.AnnAssign]:
+            #     targets = child.targets if hasattr(child, "targets") else [child.target]
+            #
+            #     if isinstance(child.value, ast.Dict):
+            #         namespaced_name = t.id if not parent else f"{parent}.{t.id}"
+            #         self._get_flat_dict_names(child.value, namespaced_name, ret)
+            #
+            #     for t in targets:
+            #         if type(t) is ast.Name:
+            #             ret.append(namespaced_name)
+            #
+            #         elif type(t) is ast.Attribute:
+            #             namespaced_name = f"{t.value}.{t.attr}" if not parent else f"{parent}.{t.value}.{t.attr}"
+            #             ret.append(namespaced_name)
+
+            # if type(child) in [ast.Assign, ast.AnnAssign]:
+            #     targets = child.targets if hasattr(child, "targets") else [child.target]
+            #
+            #     for t in targets:
+            #         if type(t) is ast.Name:
+            #             namespaced_name = t.id if not parent else f"{parent}.{t.id}"
+            #             ret.append(namespaced_name)
+            #             if isinstance(child.value, ast.Dict):
+            #                 self._get_flat_names(child.value, namespaced_name, ret)
+            #         elif type(t) is ast.Attribute:
+            #             namespaced_name = f"{t.value}.{t.attr}" if not parent else f"{parent}.{t.value}.{t.attr}"
+            #             ret.append(namespaced_name)
 
 
 @dataclass
@@ -1295,6 +1373,10 @@ class Module(ContainerObj):
     @property
     def file(self) -> Path:
         ret = self.module_descriptor.path
+        return ret
+
+    def _is_child_ignored(self, name: str, obj: Any) -> bool:
+        ret = name in __builtins__.keys() or name == "__builtins__"
         return ret
 
     def _python_obj_to_obj_classes(

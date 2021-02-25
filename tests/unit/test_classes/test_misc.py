@@ -1269,3 +1269,10 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
         assert module.device.Cake.eat() == "Eating"
+
+    def test_import_external_class(self, sandbox):
+        # should be Reference
+        assert False
+
+    def test_moves_functions_first_lines_class_methods(self, sandbox):
+        assert False

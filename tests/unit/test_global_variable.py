@@ -76,18 +76,16 @@ class TestGlobalVariable(utils.TestBase):
         carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
 
         reloader.reload(carwash)
-        reloader.assert_actions(
-            "Update Module: sandbox.carwash",
-            "Update Variable: sandbox.carwash.sprinkler_n",
-            "Update Module: sandbox.car",
-            "Update Variable: sandbox.car.sprinkler_n",
-            "Update Variable: sandbox.car.car_sprinklers",
-            "Update Module: sandbox.accounting",
-            "Update Variable: sandbox.accounting.car_sprinklers",
-            "Update Variable: sandbox.accounting.sprinklers_from_accounting",
-            "Update Module: sandbox.client",
-            "Update Variable: sandbox.client.client_car_sprinklers",
-        )
+        reloader.assert_actions('Update Module: sandbox.carwash',
+         'Update Variable: sandbox.carwash.sprinkler_n',
+         'Update Module: sandbox.car',
+         'Update Reference: sandbox.car.sprinkler_n',
+         'Update Variable: sandbox.car.car_sprinklers',
+         'Update Module: sandbox.accounting',
+         'Update Reference: sandbox.accounting.car_sprinklers',
+         'Update Variable: sandbox.accounting.sprinklers_from_accounting',
+         'Update Module: sandbox.client',
+         'Update Variable: sandbox.client.client_car_sprinklers')
 
         assert carwash.device.sprinkler_n == 6
         assert car.device.sprinkler_n == 6
@@ -144,13 +142,11 @@ class TestGlobalVariable(utils.TestBase):
 
         reloader.reload(carwash)
 
-        reloader.assert_actions(
-            "Update Module: sandbox.carwash",
-            "Update Variable: sandbox.carwash.sprinkler_n",
-            "Update Module: sandbox.car",
-            "Update Variable: sandbox.car.sprinkler_n",
-            "Update Variable: sandbox.car.car_sprinklers",
-        )
+        reloader.assert_actions('Update Module: sandbox.carwash',
+ 'Update Variable: sandbox.carwash.sprinkler_n',
+ 'Update Module: sandbox.car',
+ 'Update Reference: sandbox.car.sprinkler_n',
+ 'Update Variable: sandbox.car.car_sprinklers')
 
         assert carwash.device.sprinkler_n == 6
         assert car.device.car_sprinklers == 2
