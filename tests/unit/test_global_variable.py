@@ -1,8 +1,5 @@
-from pytest import raises
-
 from tests import utils
 from tests.utils import Module, Reloader
-from smartreload import dependency_watcher
 
 
 class TestGlobalVariable(utils.TestBase):

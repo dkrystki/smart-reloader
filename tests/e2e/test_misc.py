@@ -8,6 +8,7 @@ from tests import utils
 from tests.utils import Module, Reloader
 
 
+@mark.run(order=-1)
 class TestClasses(utils.TestBase):
     @mark.parametrize(
         "command",

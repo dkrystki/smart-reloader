@@ -1,8 +1,7 @@
-from pytest import raises
+from pytest import raises, mark
 
 from tests import utils
 from tests.utils import Module, Reloader
-from smartreload import dependency_watcher
 
 
 class TestModules(utils.TestBase):

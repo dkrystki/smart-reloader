@@ -6,8 +6,8 @@ from tests.utils import Module, Reloader, Config
 from smartreload import dependency_watcher
 
 
+@pytest.mark.run(order=1)
 class TestPlugins(utils.TestBase):
-    @pytest.mark.run(order=1)
     def test_pandas_objs(self, sandbox, capsys):
         reloader = Reloader(sandbox, config=Config(plugins=["smart_pandas"]))
 

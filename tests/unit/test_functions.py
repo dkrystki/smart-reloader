@@ -438,7 +438,7 @@ class TestFunctions(utils.TestBase):
         reloader.reload(module)
         reloader.assert_actions('Update Module: module',
                              'Add Function: module.added_fun',
-                             'UpdateFirstLineNumber: Function: module.fun')
+                             'Move Function: module.fun')
 
         assert module.device.fun.__code__.co_firstlineno == 5
         reloader.rollback()
@@ -480,7 +480,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_actions('Update Module: module', 'Update Function: module.how_many_eat')
+        reloader.assert_actions('Update Module: module', 'DeepUpdate Function: module.how_many_eat')
 
         assert module.device.how_many_eat() == 11
         assert module.device.ref_fun() == 11

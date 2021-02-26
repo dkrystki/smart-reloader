@@ -13,7 +13,7 @@ from watchdog.observers import Observer
 
 from smartreload import PartialReloader, console
 from smartreload.misc import is_linux
-from smartreload.partialreloader import FullReloadNeeded
+from smartreload.exceptions import FullReloadNeeded
 
 logger = getLogger("Reloader")
 logger.setLevel(logging.INFO)

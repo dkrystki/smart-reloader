@@ -405,7 +405,7 @@ class TestClasses(utils.TestBase):
 
         reloader.assert_actions('Update Module: module',
                                  'Add ClassVariable: module.Carwash.cars_n',
-                                 'UpdateFirstLineNumber: Method: module.Carwash.fun')
+                                 'Move Method: module.Carwash.fun')
 
         assert hasattr(module.device.Carwash, "sprinklers_n")
         assert hasattr(module.device.Carwash, "cars_n")
@@ -448,7 +448,7 @@ class TestClasses(utils.TestBase):
 
         reloader.assert_actions('Update Module: module',
                              'Delete ClassVariable: module.Carwash.cars_n',
-                             'UpdateFirstLineNumber: Method: module.Carwash.fun')
+                             'Move Method: module.Carwash.fun')
 
         assert hasattr(module.device.Carwash, "sprinklers_n")
         assert not hasattr(module.device.Carwash, "cars_n")
@@ -1271,8 +1271,65 @@ class TestClasses(utils.TestBase):
         assert module.device.Cake.eat() == "Eating"
 
     def test_import_external_class(self, sandbox):
-        # should be Reference
-        assert False
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        from typing import List, Dict
+        
+        test_type = List
+        """,
+        )
+
+        module.load()
+        module.rewrite(
+            """
+        from typing import List, Dict
+        
+        test_type = Dict
+        """
+        )
+
+        reloader.reload(module)
+        reloader.assert_actions('Update Module: module', 'Update Reference: module.test_type')
 
     def test_moves_functions_first_lines_class_methods(self, sandbox):
-        assert False
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+            class Cupcake:
+                def eat(self):
+                    return f"Eating 1 cupcake"
+                
+                @classmethod
+                def name(self):
+                    return "Cupcake"
+            """,
+        )
+
+        module.load()
+
+        module.rewrite(
+            """
+            class Cupcake:
+            
+                def eat(self):
+                    return f"Eating 1 cupcake"
+                
+                @classmethod
+                def name(self):
+                    return "Cupcake"
+            """
+        )
+
+        reloader.reload(module)
+
+        reloader.assert_actions('Update Module: module',
+                                'Move Method: module.Cupcake.eat',
+                                'Move ClassMethod: module.Cupcake.name')
+
+        assert module.device.Cupcake.eat.__code__.co_firstlineno == 4
+        assert module.device.Cupcake.name.__func__.__code__.co_firstlineno == 7

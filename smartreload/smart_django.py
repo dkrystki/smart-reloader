@@ -4,7 +4,7 @@ from typing import Any, List
 from dataclasses import dataclass, field
 from django.db.models.query_utils import DeferredAttribute
 
-from smartreload.partialreloader import ClassVariable, ContainerObj, Object
+from smartreload.objects import ClassVariable, ContainerObj, Object
 
 
 class DbField(ClassVariable):
