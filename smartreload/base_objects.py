@@ -65,23 +65,21 @@ class Object(ABC):
     class Add(Action):
         parent: "ContainerObj"
         obj: "Object"
-        fixed_obj: "Object" = field(init=False)
 
         def __repr__(self) -> str:
             return f"Add {repr(self.obj)}"
 
         def execute(self) -> None:
-            self.fixed_obj = copy(self.obj)
-            self.fixed_obj.python_obj = self.obj.get_fixed_reference(self.parent.module)
-            self.parent.set_attr(self.obj.name, self.fixed_obj.python_obj)
+            self.obj.fix_reference(self.parent.module)
+            self.parent.set_attr(self.obj.name, self.obj.python_obj)
 
         def post_execute(self):
-            self.parent.module.register_obj(self.fixed_obj)
+            self.parent.module.register_obj(self.obj)
 
         def rollback(self) -> None:
             super().rollback()
             self.parent.del_attr(self.obj.name)
-            self.parent.module.unregister_obj(self.fixed_obj)
+            self.parent.module.unregister_obj(self.obj)
 
     @dataclass(repr=False)
     class Update(Action):
@@ -93,8 +91,8 @@ class Object(ABC):
             return f"Update {repr(self.obj)}"
 
         def execute(self) -> None:
-            python_obj = self.new_obj.get_fixed_reference(self.obj.module)
-            self.obj.parent.set_attr(self.obj.name, python_obj)
+            self.new_obj.fix_reference(self.obj.module)
+            self.obj.parent.set_attr(self.obj.name, self.new_obj.python_obj)
 
         def rollback(self) -> None:
             super().rollback()
@@ -288,7 +286,7 @@ class Object(ABC):
         ret = obj_full_name not in self.module.module_descriptor.source.flat_syntax
         return ret
 
-    def get_fixed_reference(self, module: "Module") -> Any:
+    def fix_reference(self, module: "Module") -> Any:
         return self.python_obj
 
     def get_python_obj_from_module(self, obj: Any, module: "Module") -> Optional[Any]:
@@ -448,28 +446,23 @@ class Object(ABC):
 
 @dataclass(repr=False)
 class FinalObj(Object, ABC):
-    def get_fixed_reference(self, module: "Module") -> Any:
-        python_obj = copy(self.python_obj)
-        if not self.is_obj_foreign(self.full_name_without_module_name) and not self.is_primitive(
+    def fix_reference(self, module: "Module") -> Any:
+        if self.is_obj_foreign(self.full_name_without_module_name) or self.is_primitive(
             self.python_obj
         ):
-            fixed_reference_obj = self.get_python_obj_from_module(
-                self.python_obj, module
-            )
-            try:
-                python_obj.__class__ = fixed_reference_obj.__class__
-            except TypeError:
-                pass
-
-        return python_obj
+            return
+        fixed_reference_obj = self.get_python_obj_from_module(
+            self.python_obj, module
+        )
+        try:
+            self.python_obj.__class__ = fixed_reference_obj.__class__
+        except TypeError:
+            pass
 
 
 @dataclass(repr=False)
 class ContainerObj(Object, ABC):
     children: Dict[str, "Object"] = field(init=False, default_factory=dict)
-
-    def __post_init__(self) -> None:
-        self._collect_children()
 
     def get_dict(self) -> "OrderedDict[str, Any]":
         raise NotImplementedError()
@@ -502,8 +495,10 @@ class ContainerObj(Object, ABC):
 
         for o in candidate.content.values():
             self.module.register_obj(o)
+            if isinstance(o, ContainerObj):
+                o.collect_children()
 
-    def _collect_children(self) -> None:
+    def collect_children(self) -> None:
         for n, o in self.get_dict().items():
             if self._is_child_ignored(n, o):
                 continue

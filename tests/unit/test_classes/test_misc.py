@@ -736,6 +736,14 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
+        reloader.assert_actions(
+            "Update Module: module",
+            "Update ClassVariable: module.Car.engine",
+            "Update ClassVariable: module.Car.engine_class",
+            "Update ClassVariable: module.Carwash.car_a",
+            "Update Method: module.Carwash.__init__",
+        )
+
         reloader.assert_objects(module, 'module.Car.__init__: Method',
                                         'module.Car.engine: ClassVariable',
                                         'module.Car.engine_class: Reference',
@@ -1239,27 +1247,22 @@ class TestClasses(utils.TestBase):
         )
 
         init.load()
-
-        reloader.assert_objects(init, 'sandbox.cupcake: Import', 'sandbox.cupcake_base: Import')
-        reloader.assert_objects(cupcake_base, 'sandbox.cupcake_base.CupcakeBase.size: ClassVariable',
-                                              'sandbox.cupcake_base.CupcakeBase: Class')
-        reloader.assert_objects(cupcake, 'sandbox.cupcake.Cupcake.colour: ClassVariable',
-                                         'sandbox.cupcake.Cupcake: Class',
-                                         'sandbox.cupcake.CupcakeBase: Foreigner')
-
         cupcake_base.load_from(init)
         cupcake.load_from(init)
+
+        def assert_not_reloaded():
+            reloader.assert_objects(init, 'sandbox.cupcake: Import', 'sandbox.cupcake_base: Import')
+            reloader.assert_objects(cupcake_base, 'sandbox.cupcake_base.CupcakeBase.size: ClassVariable',
+                                                  'sandbox.cupcake_base.CupcakeBase: Class')
+            reloader.assert_objects(cupcake, 'sandbox.cupcake.Cupcake.colour: ClassVariable',
+                                             'sandbox.cupcake.Cupcake: Class',
+                                             'sandbox.cupcake.CupcakeBase: Foreigner')
+        assert_not_reloaded()
 
         cupcake.device.Cupcake.size = 15
 
         reloader.reload(cupcake)
-        reloader.assert_objects(init, 'sandbox.cupcake: Import', 'sandbox.cupcake_base: Import')
-        reloader.assert_objects(cupcake_base, 'sandbox.cupcake_base.CupcakeBase.size: ClassVariable',
-                                'sandbox.cupcake_base.CupcakeBase: Class')
-        reloader.assert_objects(cupcake, 'sandbox.cupcake.Cupcake.colour: ClassVariable',
-                                'sandbox.cupcake.Cupcake: Class',
-                                'sandbox.cupcake.CupcakeBase: Foreigner')
-
+        assert_not_reloaded()
         reloader.assert_actions('Update Module: sandbox.cupcake')
 
     def test_method_with_list_comprehensions_twice(self, sandbox):
@@ -1277,7 +1280,12 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+            assert module.device.Cupcake().eat() == 10
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1291,7 +1299,6 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
-
         reloader.assert_actions(
             'Update Module: module', 'Update Method: module.Cupcake.eat',
         )
@@ -1314,7 +1321,8 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
 
         module.rewrite(
             """
@@ -1325,11 +1333,11 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        assert_not_reloaded()
         reloader.assert_actions('Update Module: module')
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        assert_not_reloaded()
         reloader.assert_actions('Update Module: module')
 
     def test_add_method_closure(self, sandbox):
@@ -1345,7 +1353,11 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1358,13 +1370,14 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
 
         reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating very sweet cupcake"
 
         reloader.rollback()
+        assert_not_reloaded()
         module.assert_not_changed()
 
     def test_edit_method_closure(self, sandbox):
@@ -1382,7 +1395,11 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1395,13 +1412,14 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
 
         reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating super sweet cupcake"
 
         reloader.rollback()
+        assert_not_reloaded()
         module.assert_not_changed()
 
     def test_add_lambda(self, sandbox):
@@ -1416,7 +1434,11 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cake: Class')
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1426,12 +1448,13 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Cake.fun: Method', 'module.Cake: Class')
 
         reloader.assert_actions('Update Module: module', 'Add Method: module.Cake.fun')
         assert module.device.Cake.fun(5) == 25
 
         reloader.rollback()
+        assert_not_reloaded()
         module.assert_not_changed()
 
     def test_edit_lambda(self, sandbox):
@@ -1446,7 +1469,11 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cake.fun: Method', 'module.Cake: Class')
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1456,13 +1483,14 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Cake.fun: Method', 'module.Cake: Class')
 
         reloader.assert_actions('Update Module: module', 'Update Method: module.Cake.fun')
         assert module.device.Cake.fun(5) == 25
 
         reloader.rollback()
         module.assert_not_changed()
+        assert_not_reloaded()
 
         assert module.device.Cake.fun(5) == 15
 
@@ -1478,7 +1506,11 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cake: Class')
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1490,12 +1522,13 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Cake.eat: StaticMethod', 'module.Cake: Class')
 
         reloader.assert_actions('Update Module: module', 'Add StaticMethod: module.Cake.eat')
         assert module.device.Cake.eat() == "Eating"
 
         reloader.rollback()
+        assert_not_reloaded()
         module.assert_not_changed()
 
     def test_edit_staticmethod(self, sandbox):
@@ -1512,7 +1545,16 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+        eat_id = id(module.device.Cake.eat)
+
+        def assert_ids():
+            assert id(module.device.Cake.eat) == eat_id
+
+        def assert_not_reloaded():
+            assert_ids()
+            reloader.assert_objects(module, 'module.Cake.eat: StaticMethod', 'module.Cake: Class')
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1524,7 +1566,8 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Cake.eat: StaticMethod', 'module.Cake: Class')
+        assert_ids()
 
         reloader.assert_actions('Update Module: module', 'Update StaticMethod: module.Cake.eat')
         assert module.device.Cake.eat() == "Eating fast"
@@ -1547,7 +1590,14 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Dict: Foreigner',
+                                            'module.List: Foreigner',
+                                            'module.test_type: Reference')
+            module.assert_not_changed()
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1558,9 +1608,14 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Dict: Foreigner',
+                                        'module.List: Foreigner',
+                                        'module.test_type: Reference')
 
         reloader.assert_actions('Update Module: module', 'Update Reference: module.test_type')
+
+        reloader.rollback()
+        assert_not_reloaded()
 
     def test_moves_functions_first_lines_class_methods(self, sandbox):
         reloader = Reloader(sandbox)
@@ -1579,7 +1634,14 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.Cupcake.eat: Method',
+                                            'module.Cupcake.name: ClassMethod',
+                                            'module.Cupcake: Class')
+            module.assert_not_changed()
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -1595,7 +1657,9 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.Cupcake.eat: Method',
+                                            'module.Cupcake.name: ClassMethod',
+                                            'module.Cupcake: Class')
 
         reloader.assert_actions('Update Module: module',
                                 'Move Method: module.Cupcake.eat',
@@ -1603,3 +1667,9 @@ class TestClasses(utils.TestBase):
 
         assert module.device.Cupcake.eat.__code__.co_firstlineno == 4
         assert module.device.Cupcake.name.__func__.__code__.co_firstlineno == 7
+
+        reloader.rollback()
+        assert module.device.Cupcake.eat.__code__.co_firstlineno == 4
+        assert module.device.Cupcake.name.__func__.__code__.co_firstlineno == 7
+
+        assert_not_reloaded()

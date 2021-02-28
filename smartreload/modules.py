@@ -300,7 +300,7 @@ class Module(ContainerObj):
         self.name = self.module_descriptor.name
         self.parent = None
         self.module = self
-        self._collect_children()
+        self.collect_children()
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:

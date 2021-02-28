@@ -33,12 +33,13 @@ if TYPE_CHECKING:
 
 @dataclass(repr=False)
 class Foreigner(FinalObj):
-    def get_fixed_reference(self, module: "Module") -> Any:
-        if not self.is_primitive(self.python_obj):
-            ret = self.get_python_obj_from_module(self.python_obj, module)
-        else:
-            ret = self.python_obj
-        return ret
+    def fix_reference(self, module: "Module") -> None:
+        if self.is_primitive(self.python_obj):
+            return
+        ret = self.get_python_obj_from_module(self.python_obj, module)
+        if not ret:
+            return
+        self.python_obj = ret
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
@@ -56,12 +57,13 @@ class Foreigner(FinalObj):
 
 @dataclass(repr=False)
 class Reference(FinalObj):
-    def get_fixed_reference(self, module: "Module") -> Any:
-        if not self.is_primitive(self.python_obj):
-            ret = self.get_python_obj_from_module(self.python_obj, module)
-        else:
-            ret = self.python_obj
-        return ret
+    def fix_reference(self, module: "Module") -> None:
+        if self.is_primitive(self.python_obj):
+            return
+        ret = self.get_python_obj_from_module(self.python_obj, module)
+        if not ret:
+            return
+        self.python_obj = ret
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
@@ -350,20 +352,19 @@ class Class(ContainerObj):
 
         def execute(self, dry_run=False) -> None:
             source = dedent(self.obj.source)
-            self.fixed_obj = copy(self.obj)
 
             if isinstance(self.parent, Class):
                 context = dict(self.parent.python_obj.__dict__)
                 exec(source, self.parent.module.python_obj.__dict__, context)
                 fixed_python_obj = context[self.obj.name]
-                self.fixed_obj.python_obj = fixed_python_obj
+                self.obj.python_obj = fixed_python_obj
                 self.parent.set_attr(self.obj.name, fixed_python_obj)
             else:
                 exec(source, self.parent.module.python_obj.__dict__)
                 fixed_python_obj = self.parent.module.python_obj.__dict__[self.obj.name]
-                self.fixed_obj.python_obj = fixed_python_obj
+                self.obj.python_obj = fixed_python_obj
 
-            self.parent.module.register_obj(self.fixed_obj)
+            self.parent.module.register_obj(self.obj)
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
         if name == "__all__":
@@ -388,9 +389,6 @@ class Class(ContainerObj):
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
         ret = inspect.isclass(obj) and name == obj.__name__
         return ret
-
-    def __post_init__(self):
-        super().__post_init__()
 
     def get_actions_for_update(self, new_obj: "Class") -> List["BaseAction"]:
         if [c.__name__ for c in self.python_obj.__mro__] == [c.__name__ for c in new_obj.python_obj.__mro__]:
@@ -422,14 +420,12 @@ class Method(Function):
     class Add(Function.Add):
         obj: "Method"
         parent: "Class"
-        fixed_obj: "Method" = field(init=False)
 
         def execute(self) -> None:
             fun, code = self.obj.get_fixed_fun(self.obj, self.parent)
-            self.fixed_obj = copy(self.obj)
-            self.fixed_obj.python_obj = fun
-            self.fixed_obj.python_obj.__code__ = code
-            setattr(self.parent.python_obj, self.obj.name, self.fixed_obj.python_obj)
+            self.obj.python_obj = fun
+            self.obj.python_obj.__code__ = code
+            setattr(self.parent.python_obj, self.obj.name, self.obj.python_obj)
 
     class Update(Function.Update):
         obj: "Method"
@@ -731,10 +727,17 @@ class UserObject(Object, ABC):
 
 @dataclass(repr=False)
 class Iterable(ContainerObj, ABC):
-    def get_python_obj_with_fixed_refs(self, from_module: "Module") -> Any:
-        raise NotImplementedError()
+    class Update(ContainerObj.Update):
+        obj: "ListObj"
+        new_obj: Optional["ListObj"]
+        parent: "ContainerObj"
 
-    def _collect_children(self) -> None:
+        def execute(self) -> None:
+            self.obj.python_obj.clear()
+            self.new_obj.fix_reference(self.obj.module)
+            self.obj.python_obj.extend(self.new_obj.python_obj)
+
+    def collect_children(self) -> None:
         for i, o in enumerate(self.python_obj):
             name = str(i)
             won_candidate = self._get_winning_candidate(name=name, obj=o)
@@ -750,25 +753,14 @@ class Iterable(ContainerObj, ABC):
 class ListObj(Iterable):
     python_obj: list
 
-    class Update(Iterable.Update):
-        obj: "ListObj"
-        new_obj: Optional["ListObj"]
-        parent: "ContainerObj"
-
-        def execute(self) -> None:
-            self.obj.python_obj.clear()
-            fixed = self.new_obj.get_python_obj_with_fixed_refs(self.obj.module)
-            self.obj.python_obj.extend(fixed)
-
-    def get_python_obj_with_fixed_refs(self, from_module: "Module") -> List[Any]:
+    def fix_reference(self, module: "Module") -> Any:
+        self.python_obj.clear()
         ret = []
         for o in self.children.values():
-            if isinstance(o, Iterable):
-                ret.append(o.get_python_obj_with_fixed_refs(from_module))
-            else:
-                ret.append(o.get_fixed_reference(from_module))
+            o.fix_reference(module)
+            ret.append(o.python_obj)
 
-        return ret
+        self.python_obj.extend(ret)
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
@@ -798,15 +790,13 @@ class TupleObj(Iterable):
         obj: "Tuple"
         new_obj: Optional["Tuple"]
 
-    def get_python_obj_with_fixed_refs(self, from_module: "Module") -> Tuple[Any]:
+    def fix_reference(self, module: "Module") -> Any:
         ret = []
         for o in self.children.values():
-            if isinstance(o, Iterable):
-                ret.append(o.get_python_obj_with_fixed_refs(from_module))
-            else:
-                ret.append(o.get_fixed_reference(from_module))
+            o.fix_reference(module)
+            ret.append(o.python_obj)
 
-        return tuple(ret)
+        self.python_obj = tuple(ret)
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
