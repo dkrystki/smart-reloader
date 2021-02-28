@@ -16,6 +16,7 @@ class TestLists(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         cakes_id = id(module.device.cakes)
 
@@ -26,6 +27,7 @@ class TestLists(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions('Update Module: module', 'Update List: module.cakes')
 
@@ -43,6 +45,7 @@ class TestLists(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         sweets_id = id(module.device.sweets)
         nested_id = id(module.device.sweets[-1])
@@ -54,6 +57,7 @@ class TestLists(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions('Update Module: module', 'Update List: module.sweets')
 
@@ -87,6 +91,7 @@ class TestLists(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         sweets_id = id(module.device.sweets)
 
@@ -112,6 +117,7 @@ class TestLists(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'Update List: module.sweets')
 
         assert module.device.sweets == [module.device.Cheesecake, module.device.ChiffonCake,
@@ -134,6 +140,7 @@ class TestLists(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         cakes_id = id(module.device.cakes)
 
@@ -147,6 +154,7 @@ class TestLists(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions('Update Module: module',
                                  'DeepUpdate Tuple: module.cakes',

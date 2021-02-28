@@ -36,9 +36,17 @@ class TestModules(utils.TestBase):
         slave_module.load_from(init)
         module.load_from(init)
 
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
+
         module.replace("global_var = 2", "global_var = 5")
 
         reloader.reload(module)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
+
 
         reloader.assert_actions(
             "Update Module: sandbox.module",
@@ -63,6 +71,7 @@ class TestModules(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -72,6 +81,7 @@ class TestModules(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions("Update Module: module", "Add Import: module.math")
 
@@ -94,6 +104,7 @@ class TestModules(utils.TestBase):
             """,
         )
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -102,6 +113,7 @@ class TestModules(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -136,6 +148,9 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave, '')
+        reloader.assert_objects(master, '')
 
         slave.load_from(init)
         master.load_from(init)
@@ -150,6 +165,9 @@ class TestModules(utils.TestBase):
         )
 
         reloader.reload(master)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave, '')
+        reloader.assert_objects(master, '')
 
         reloader.assert_actions('Update Module: sandbox.master', 'Add Import: sandbox.master.slave')
 
@@ -186,9 +204,12 @@ class TestModules(utils.TestBase):
             """,
         )
         init.load()
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         module.rewrite("global_var = 0")
 
@@ -196,6 +217,10 @@ class TestModules(utils.TestBase):
             reloader.reload(module)
 
         reloader.rollback()
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions(
             "Update Module: sandbox.module",
@@ -237,6 +262,9 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         slave_module.load_from(init)
         module.load_from(init)
@@ -248,8 +276,11 @@ class TestModules(utils.TestBase):
         """
         )
         reloader.reload(module)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
-        reloader.assert_actions('Update Module: sandbox.module', 'Add Reference: sandbox.module.Optional')
+        reloader.assert_actions('Update Module: sandbox.module', 'Add Foreigner: sandbox.module.Optional')
 
         reloader.rollback()
         init.assert_not_changed()
@@ -284,9 +315,12 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -298,9 +332,12 @@ class TestModules(utils.TestBase):
         )
 
         reloader.reload(slave_module)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
-        reloader.assert_actions('Add Reference: sandbox.module.tesla_car_2',
- 'Add Reference: sandbox.module.tesla_car_3',
+        reloader.assert_actions('Add Foreigner: sandbox.module.tesla_car_2',
+ 'Add Foreigner: sandbox.module.tesla_car_3',
  'Update All: sandbox.slave_module.__all__',
  'Update Module: sandbox.module',
  'Update Module: sandbox.slave_module',
@@ -343,9 +380,12 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_in("tesla_car_2")
@@ -355,11 +395,15 @@ class TestModules(utils.TestBase):
 
         reloader.reload(slave_module)
 
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions('Add All: sandbox.slave_module.__all__',
-         'Delete Reference: sandbox.module.tesla_car_2',
-         'Delete Reference: sandbox.module.tesla_car_3',
-         'Update Module: sandbox.module',
-         'Update Module: sandbox.slave_module',
+                                 'Delete Foreigner: sandbox.module.tesla_car_2',
+                                 'Delete Foreigner: sandbox.module.tesla_car_3',
+                                 'Update Module: sandbox.module',
+                                 'Update Module: sandbox.slave_module',
          ignore_order=True,
         )
 
@@ -400,9 +444,12 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -411,9 +458,12 @@ class TestModules(utils.TestBase):
         slave_module.replace('__all__ = ["tesla_car_1"]', "")
 
         reloader.reload(slave_module)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
-        reloader.assert_actions('Add Reference: sandbox.module.tesla_car_2',
-             'Add Reference: sandbox.module.tesla_car_3',
+        reloader.assert_actions('Add Foreigner: sandbox.module.tesla_car_2',
+             'Add Foreigner: sandbox.module.tesla_car_3',
              'Delete All: sandbox.slave_module.__all__',
              'Update Module: sandbox.module',
              'Update Module: sandbox.slave_module',
@@ -457,9 +507,12 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -468,9 +521,12 @@ class TestModules(utils.TestBase):
         module.rewrite("")
 
         reloader.reload(module)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions('Update Module: sandbox.module',
- 'Delete Reference: sandbox.module.tesla_car_1')
+ 'Delete Foreigner: sandbox.module.tesla_car_1')
 
         module.assert_obj_not_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -506,9 +562,12 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -516,11 +575,14 @@ class TestModules(utils.TestBase):
         slave_module.append('tesla_car_2 = "Model S"')
 
         reloader.reload(slave_module)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions('Update Module: sandbox.slave_module',
                                 'Add Variable: sandbox.slave_module.tesla_car_2',
                                 'Update Module: sandbox.module',
-                                'Add Reference: sandbox.module.tesla_car_2')
+                                'Add Foreigner: sandbox.module.tesla_car_2')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_in("tesla_car_2")
@@ -556,9 +618,12 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -566,6 +631,9 @@ class TestModules(utils.TestBase):
         slave_module.append('tesla_car_2 = "Model 3"')
 
         reloader.reload(slave_module)
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module, '')
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions('Update Module: sandbox.slave_module',
                                 'Add Variable: sandbox.slave_module.tesla_car_2')
@@ -609,25 +677,51 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-
         slave_module_1.load_from(init)
         slave_module_2.load_from(init)
         module.load_from(init)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module_2, '')
+        reloader.assert_objects(slave_module_1, '')
+        reloader.assert_objects(module, '')
 
         module.assert_obj_in("car_1")
         module.assert_obj_in("car_2")
 
         module.replace("from .slave_module_2 import *", "")
         reloader.reload(module)
-        reloader.assert_actions('Update Module: sandbox.module', 'Delete Reference: sandbox.module.car_2')
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module_2, '')
+        reloader.assert_objects(slave_module_1, '')
+        reloader.assert_objects(module, '')
+
+        reloader.assert_actions('Update Module: sandbox.module', 'Delete Foreigner: sandbox.module.car_2')
         module.assert_obj_in("car_1")
         module.assert_obj_not_in("car_2")
 
         slave_module_2.append("car_3 = 'Model X'")
         reloader.reload(slave_module_2)
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module_2, '')
+        reloader.assert_objects(slave_module_1, '')
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions('Update Module: sandbox.slave_module_2',
                                 'Add Variable: sandbox.slave_module_2.car_3')
 
         module.assert_obj_in("car_1")
         module.assert_obj_not_in("car_2")
         module.assert_obj_not_in("car_3")
+
+        reloader.rollback()
+        init.assert_not_changed()
+        slave_module_1.assert_not_changed()
+        slave_module_2.assert_not_changed()
+        module.assert_not_changed()
+
+        reloader.assert_objects(init, '')
+        reloader.assert_objects(slave_module_2, '')
+        reloader.assert_objects(slave_module_1, '')
+        reloader.assert_objects(module, '')

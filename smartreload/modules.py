@@ -1,6 +1,7 @@
 import ast
 import sys
 from collections import OrderedDict, defaultdict
+from logging import Logger
 
 from dataclasses import field
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import (
     Dict,
     List,
     Optional,
-    Type, TYPE_CHECKING,
+    Type, TYPE_CHECKING, Tuple,
 )
 
 from . import misc
@@ -227,29 +228,43 @@ class Modules(dict):
         return self._dict.__delitem__(*args, **kwargs)
 
 
-
 @dataclass(repr=False)
 class UpdateModule(BaseAction):
     module_file: Path
     priority = 50
     module_descriptor: "ModuleDescriptor" = field(init=False)
 
+    logger: Logger = field(init=False)
+
     def __post_init__(self) -> None:
         self.module_descriptor = sys.modules.user_modules[str(self.module_file)][0]
-        self.old_source = self.module_descriptor.source
+        self.logger = self.reloader.logger
+
+    def disable_pydev_warning(self):
+        try:
+            import pydevd_tracing
+        except ImportError:
+            return
+
+        pydevd_tracing.TracingFunctionHolder._warn = False
 
     def execute(self, dry_run=False) -> None:
+        self.logger.debug("Old module: ")
+        self.logger.debug("\n".join(self.module_descriptor.module_obj.get_obj_strs()))
+        self.disable_pydev_warning()
+
         trace = sys.gettrace()
         sys.settrace(None)
-        module_obj = misc.import_from_file(self.module_descriptor.path, self.reloader.root)
+        module_python_obj = misc.import_from_file(self.module_descriptor.path, self.reloader.root)
         sys.settrace(trace)
 
         new_module_descriptor = ModuleDescriptor(reloader=self.reloader,
                                                  name=self.module_descriptor.name,
                                                  path=self.module_descriptor.path,
-                                                 body=module_obj)
-
+                                                 body=module_python_obj)
         new_module_descriptor.post_execute()
+        self.logger.debug("New module: ")
+        self.logger.debug("\n".join(new_module_descriptor.module_obj.get_obj_strs()))
 
         actions = self.module_descriptor.module_obj.get_actions_for_update(new_module_descriptor.module_obj)
         actions.sort(key=lambda a: a.priority, reverse=True)
@@ -261,11 +276,12 @@ class UpdateModule(BaseAction):
             a.pre_execute()
             if not dry_run:
                 a.execute()
+                a.post_execute()
 
-        self.module_descriptor.fetch_source()
+        sys.modules.user_modules[str(self.module_file)][0] = new_module_descriptor
 
     def rollback(self) -> None:
-        self.module_descriptor.source = self.old_source
+        sys.modules.user_modules[str(self.module_file)][0] = self.module_descriptor
 
     def __repr__(self) -> str:
         return f"Update Module: {self.module_descriptor.name}"
@@ -300,6 +316,9 @@ class Module(ContainerObj):
         return ret
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
+        if name.startswith("__") and name.endswith("__") and name != "__all__":
+            return True
+
         ret = name in __builtins__.keys() or name == "__builtins__"
         return ret
 
@@ -318,8 +337,16 @@ class Module(ContainerObj):
         self.flat[obj.full_name] = obj
         self.python_obj_to_objs[id(obj.python_obj)].append(obj)
 
+    def unregister_obj(self, obj: Object) -> None:
+        self.flat.pop(obj.full_name)
+        self.python_obj_to_objs[id(obj.python_obj)].remove(obj)
+
     def __repr__(self) -> str:
         return f"Module: {self.module_descriptor.name}"
+
+    def get_obj_strs(self) -> Tuple[str]:
+        ret = tuple(f"{k}: {v.get_obj_type_name()}" for k, v in self.flat.items())
+        return ret
 
     def get_flat_repr(self) -> Dict[str, Object]:
         ret = {self.name: self}

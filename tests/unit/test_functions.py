@@ -19,6 +19,7 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.append(
             """
@@ -28,6 +29,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions("Update Module: module", "Add Function: module.fun2")
 
@@ -54,6 +56,7 @@ class TestFunctions(utils.TestBase):
         """,
         )
         module.load()
+        reloader.assert_objects(module, '')
 
         fun_id_before = id(module.device.fun)
         global_var_id = id(module.device.global_var)
@@ -77,6 +80,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions(
             "Update Module: module", "Update Function: module.fun"
         )
@@ -104,6 +108,7 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -113,6 +118,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions(
             "Update Module: module", "Delete Function: module.fun2"
@@ -136,6 +142,7 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -145,6 +152,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions(
             "Update Module: module",
             "Add Function: module.fun_renamed",
@@ -177,6 +185,8 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
+
         car_class_id = id(module.device.Car)
         fun_id = id(module.device.fun)
 
@@ -191,6 +201,7 @@ class TestFunctions(utils.TestBase):
         module.replace('car = Car("red")', 'car = Car("green")')
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
 
         reloader.assert_actions(
             "Update Module: module", "Update Function: module.fun"
@@ -222,10 +233,12 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.replace("return 5", "return 10")
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions(
             "Update Module: module", "Update Function: module.other_fun"
         )
@@ -250,6 +263,8 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
+
         module.rewrite(
             """
         def other_fun():
@@ -261,6 +276,8 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions(
             "Update Module: module",
             "Update Function: module.other_fun",
@@ -284,6 +301,8 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
+
         module.rewrite(
             """
         def other_fun():
@@ -295,6 +314,8 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions(
             "Update Module: module",
             "Add Function: module.other_fun",
@@ -318,6 +339,8 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
+
         module.rewrite(
             """
         def fun():
@@ -328,6 +351,8 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
         assert module.device.fun() == 15
 
@@ -348,6 +373,8 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
+
         module.rewrite(
             """
         def fun():
@@ -358,6 +385,8 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
         assert module.device.fun() == 30
 
@@ -374,6 +403,8 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
+
         module.rewrite(
             """
         fun = lambda x: 10 + x
@@ -381,6 +412,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'Add Function: module.fun')
         assert module.device.fun(5) == 15
 
@@ -398,6 +430,7 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
         module.rewrite(
             """
         fun = lambda x: x * 10
@@ -405,6 +438,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
         assert module.device.fun(5) == 50
 
@@ -425,6 +459,8 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
+
         module.rewrite(
             """
         def added_fun():
@@ -436,6 +472,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module',
                              'Add Function: module.added_fun',
                              'Move Function: module.fun')
@@ -463,6 +500,7 @@ class TestFunctions(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -480,6 +518,7 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'DeepUpdate Function: module.how_many_eat')
 
         assert module.device.how_many_eat() == 11

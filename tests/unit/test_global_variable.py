@@ -70,16 +70,24 @@ class TestGlobalVariable(utils.TestBase):
         client.load_from(init)
         boss.load_from(init)
 
+        reloader.assert_objects(carwash, 'sandbox.carwash.sprinkler_n: Variable', 'sandbox.carwash.money: Variable')
+        reloader.assert_objects(car, 'sandbox.car.sprinkler_n: Foreigner', 'sandbox.car.car_sprinklers: Variable')
+        reloader.assert_objects(accounting, 'sandbox.accounting.car_sprinklers: Foreigner',
+                                            'sandbox.accounting.sprinklers_from_accounting: Variable')
+        reloader.assert_objects(client, 'sandbox.client.carwash: Import',
+                                         'sandbox.client.client_car_sprinklers: Variable')
+        reloader.assert_objects(boss, 'sandbox.boss.carwash: Import', 'sandbox.boss.actual_money: Variable')
+
         carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
 
         reloader.reload(carwash)
         reloader.assert_actions('Update Module: sandbox.carwash',
          'Update Variable: sandbox.carwash.sprinkler_n',
          'Update Module: sandbox.car',
-         'Update Reference: sandbox.car.sprinkler_n',
+         'Update Foreigner: sandbox.car.sprinkler_n',
          'Update Variable: sandbox.car.car_sprinklers',
          'Update Module: sandbox.accounting',
-         'Update Reference: sandbox.accounting.car_sprinklers',
+         'Update Foreigner: sandbox.accounting.car_sprinklers',
          'Update Variable: sandbox.accounting.sprinklers_from_accounting',
          'Update Module: sandbox.client',
          'Update Variable: sandbox.client.client_car_sprinklers')
@@ -131,6 +139,10 @@ class TestGlobalVariable(utils.TestBase):
         carwash.load_from(init)
         car.load_from(init)
 
+        reloader.assert_objects(init, 'sandbox.carwash: Import', 'sandbox.car: Import')
+        reloader.assert_objects(carwash, 'sandbox.carwash.sprinkler_n: Variable')
+        reloader.assert_objects(car, 'sandbox.car.sprinkler_n: Foreigner', 'sandbox.car.car_sprinklers: Variable')
+
         carwash.rewrite(
             """
         sprinkler_n = 6
@@ -142,7 +154,7 @@ class TestGlobalVariable(utils.TestBase):
         reloader.assert_actions('Update Module: sandbox.carwash',
  'Update Variable: sandbox.carwash.sprinkler_n',
  'Update Module: sandbox.car',
- 'Update Reference: sandbox.car.sprinkler_n',
+ 'Update Foreigner: sandbox.car.sprinkler_n',
  'Update Variable: sandbox.car.car_sprinklers')
 
         assert carwash.device.sprinkler_n == 6
@@ -193,6 +205,11 @@ class TestGlobalVariable(utils.TestBase):
         container.load_from(init)
         car.load_from(init)
 
+        reloader.assert_objects(init, 'sandbox.carwash: Import', 'sandbox.container: Import', 'sandbox.car: Import')
+        reloader.assert_objects(carwash, 'sandbox.carwash.sprinkler_n: Variable')
+        reloader.assert_objects(container, 'sandbox.container.sprinkler_n: Foreigner')
+        reloader.assert_objects(car, 'sandbox.car.sprinkler_n: Foreigner', 'sandbox.car.car_sprinklers: Variable')
+
         carwash.rewrite(
             """
         sprinkler_n = 6
@@ -204,9 +221,9 @@ class TestGlobalVariable(utils.TestBase):
         reloader.assert_actions('Update Module: sandbox.carwash',
                                  'Update Variable: sandbox.carwash.sprinkler_n',
                                  'Update Module: sandbox.container',
-                                 'Update Reference: sandbox.container.sprinkler_n',
+                                 'Update Foreigner: sandbox.container.sprinkler_n',
                                  'Update Module: sandbox.car',
-                                 'Update Reference: sandbox.car.sprinkler_n',
+                                 'Update Foreigner: sandbox.car.sprinkler_n',
                                  'Update Variable: sandbox.car.car_sprinklers')
 
         assert carwash.device.sprinkler_n == 6
@@ -230,6 +247,7 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, 'module.global_var1: Variable')
 
         module.append("global_var2 = 2")
 
@@ -263,12 +281,14 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, 'module.Car: Class', 'module.car_class: Variable')
 
         old_Car_class = module.device.Car
 
         module.replace("car_class = None", "car_class = Car")
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.Car: Class', 'module.car_class: Reference')
 
         reloader.assert_actions(
             "Update Module: module", "Update Variable: module.car_class"
@@ -295,11 +315,14 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, 'module.fun: Function', 'module.car_fun: Variable')
+
         old_fun = module.device.fun
 
         module.replace("car_fun = None", "car_fun = fun")
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.fun: Function', 'module.car_fun: Reference')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -341,6 +364,16 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, 'module.sprinkler_n: Variable',
+                                        'module.some_fun: Function',
+                                        'module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
+                                        'module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
+                                        'module.sample_dict.lambda_fun: DictionaryItem',
+                                        'module.sample_dict.fun: Reference',
+                                        'module.sample_dict: Dictionary',
+                                        'module.print_sprinkler: Function',
+                                        'module.Car.car_sprinkler_n: ClassVariable',
+                                        'module.Car: Class')
 
         print_sprinkler_id = id(module.device.print_sprinkler)
         lambda_fun_id = id(module.device.sample_dict["lambda_fun"])
@@ -365,6 +398,16 @@ class TestGlobalVariable(utils.TestBase):
         module.replace("sprinkler_n = 1", "sprinkler_n = 2")
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.sprinkler_n: Variable',
+                                'module.some_fun: Function',
+                                'module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
+                                'module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
+                                'module.sample_dict.lambda_fun: DictionaryItem',
+                                'module.sample_dict.fun: Reference',
+                                'module.sample_dict: Dictionary',
+                                'module.print_sprinkler: Function',
+                                'module.Car.car_sprinkler_n: ClassVariable',
+                                'module.Car: Class')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -398,14 +441,16 @@ class TestGlobalVariable(utils.TestBase):
             """
         cars_n = 1
         sprinkler_n = 1
-        """,
+        """
         )
 
         module.load()
+        reloader.assert_objects(module, 'module.cars_n: Variable', 'module.sprinkler_n: Variable')
 
         module.delete("sprinkler_n = 1")
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.cars_n: Variable')
 
         reloader.assert_actions(
             "Update Module: module", "Delete Variable: module.sprinkler_n"

@@ -240,6 +240,7 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         def assert_not_reloaded():
             assert module.device.cake_shop["clients"] is None
@@ -258,10 +259,104 @@ class TestDictionaries(utils.TestBase):
         """)
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'Update DictionaryItem: module.cake_shop.clients')
 
         assert module.device.cake_shop["clients"]["number"] == 12
 
         reloader.rollback()
         assert_not_reloaded()
+        module.assert_not_changed()
+
+    def test_dynamically_created(self, sandbox):
+        reloader = Reloader(sandbox)
+
+        module = Module(
+            "module.py",
+            """
+        def create_dict():
+            return {
+                "cakes": 200,
+                "cupcakes": 150,
+                "clients": None,
+                "meta": {
+                    "shop_size_x": 100,
+                    "shop_size_y": 100,
+                }
+            }
+            
+        cake_shop = create_dict() 
+        """,
+        )
+
+        module.load()
+
+        # def assert_not_reloaded():
+        #     assert module.device.cake_shop["clients"] is None
+
+        # assert_not_reloaded()
+
+        reloader.assert_objects(module,
+                                'module.create_dict: Function',
+                                'module.cake_shop.cakes: DictionaryItem',
+                                'module.cake_shop.cupcakes: DictionaryItem',
+                                'module.cake_shop.clients: DictionaryItem',
+                                'module.cake_shop.meta.shop_size_x: DictionaryItem',
+                                'module.cake_shop.meta.shop_size_y: DictionaryItem',
+                                'module.cake_shop.meta: Dictionary',
+                                'module.cake_shop: Dictionary')
+
+        module.rewrite("""
+        def create_dict():
+            return {
+                "cakes": 200,
+                "cupcakes": 150,
+                "clients": 300,
+                "meta": {
+                    "shop_size_x": 200,
+                    "shop_size_y": 100,
+                },
+                "extra_meta": {
+                    "employees": 5
+                }
+            }
+            
+        cake_shop = create_dict()
+        """)
+
+        reloader.reload(module)
+
+        reloader.assert_objects(module,
+                                'module.create_dict: Function',
+                                'module.cake_shop.cakes: DictionaryItem',
+                                'module.cake_shop.cupcakes: DictionaryItem',
+                                'module.cake_shop.clients: DictionaryItem',
+                                'module.cake_shop.meta.shop_size_x: DictionaryItem',
+                                'module.cake_shop.meta.shop_size_y: DictionaryItem',
+                                'module.cake_shop.meta: Dictionary',
+                                'module.cake_shop.extra_meta.employees: DictionaryItem',
+                                'module.cake_shop.extra_meta: Dictionary',
+                                'module.cake_shop: Dictionary')
+
+        reloader.assert_actions('Update Module: module',
+                                 'Update Function: module.create_dict',
+                                 'Add Dictionary: module.cake_shop.extra_meta',
+                                 'Update DictionaryItem: module.cake_shop.clients',
+                                 'Update DictionaryItem: module.cake_shop.meta.shop_size_x')
+
+        assert module.device.cake_shop == {
+            "cakes": 200,
+            "cupcakes": 150,
+            "clients": 300,
+            "meta": {
+                "shop_size_x": 200,
+                "shop_size_y": 100,
+            },
+            "extra_meta": {
+                "employees": 5
+            }
+        }
+
+        reloader.rollback()
+        # assert_not_reloaded()
         module.assert_not_changed()

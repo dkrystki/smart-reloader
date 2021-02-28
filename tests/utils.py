@@ -162,3 +162,8 @@ class Reloader:
         else:
             assert sorted(actions_str) == sorted(actions)
 
+    def assert_objects(self, module: Module, *objects: str) -> None:
+        module_obj = self.device.modules.user_modules[str(module.path)][0].module_obj
+
+        object_strs = module_obj.get_obj_strs()
+        assert sorted(object_strs) == sorted(objects)

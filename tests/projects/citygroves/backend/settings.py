@@ -162,10 +162,18 @@ LOGGING = {
             "class": "logging.StreamHandler",
         },
     },
-    "root": {
+    'loggers': {
+        'root': {
+            'handlers': ['console'],
+            'level': "INFO",
+        },
+        "smartreload": {
         "handlers": ["console"],
-        "level": "INFO",
+        "level": "DEBUG",
+        },
     },
+
+
 }
 
 

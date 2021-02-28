@@ -5,6 +5,7 @@ import re
 import sys
 from abc import ABC
 from collections import OrderedDict
+from copy import copy
 
 from dataclasses import field
 from textwrap import dedent, indent
@@ -31,6 +32,29 @@ if TYPE_CHECKING:
 
 
 @dataclass(repr=False)
+class Foreigner(FinalObj):
+    def get_fixed_reference(self, module: "Module") -> Any:
+        if not self.is_primitive(self.python_obj):
+            ret = self.get_python_obj_from_module(self.python_obj, module)
+        else:
+            ret = self.python_obj
+        return ret
+
+    @classmethod
+    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
+        ret = name not in potential_parent.module.module_descriptor.source.flat_syntax
+        return ret
+
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
+        return [Module]
+
+    @classmethod
+    def get_rank(cls) -> int:
+        return int(1e4)
+
+
+@dataclass(repr=False)
 class Reference(FinalObj):
     def get_fixed_reference(self, module: "Module") -> Any:
         if not self.is_primitive(self.python_obj):
@@ -41,8 +65,7 @@ class Reference(FinalObj):
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
-        full_name = potential_parent.get_full_name_for_child(name)
-        ret = potential_parent.module.is_already_processed(obj) and not Object.is_primitive(obj) or potential_parent.is_obj_foreign(full_name)
+        ret = potential_parent.module.is_already_processed(obj) and not Object.is_primitive(obj)
         return ret
 
     @classmethod
@@ -277,12 +300,7 @@ class PropertyGetter(Function):
 
     @classmethod
     def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
-        return [Class]
-
-    @classmethod
-    def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
-        ret = isinstance(obj, property) and obj.fget
-        return ret
+        return []
 
 
 @dataclass(repr=False)
@@ -293,17 +311,34 @@ class PropertySetter(Function):
 
     @classmethod
     def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
+        return []
+
+
+@dataclass(repr=False)
+class Property(Function):
+    @classmethod
+    def get_parent_classes(cls) -> List[Type["ContainerObj"]]:
         return [Class]
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
-        ret = isinstance(obj, property) and obj.fset
+        ret = isinstance(obj, property)
         return ret
 
     @classmethod
-    def get_candidates(cls, name: str, obj: Any, potential_parent: "ContainerObj", module: "Module",
-                       reloader: "PartialReloader") -> Optional["Object.Candidates"]:
-        return super().get_candidates(name + "__setter__", obj, potential_parent, module, reloader)
+    def get_candidate_content(cls, name: str, obj: Any, potential_parent: "ContainerObj",
+                         module: "Module", reloader: "PartialReloader") -> Dict[str, "Object"]:
+        ret = {}
+
+        if obj.fget:
+            ret[name] = PropertyGetter(python_obj=obj, name=name, parent=potential_parent,
+                             reloader=reloader, module=module)
+        if obj.fset:
+            setter_name = name + "__setter__"
+            ret[setter_name] = PropertySetter(python_obj=obj, name=setter_name, parent=potential_parent,
+            reloader = reloader, module = module)
+
+        return ret
 
 
 @dataclass(repr=False)
@@ -315,13 +350,20 @@ class Class(ContainerObj):
 
         def execute(self, dry_run=False) -> None:
             source = dedent(self.obj.source)
+            self.fixed_obj = copy(self.obj)
 
             if isinstance(self.parent, Class):
                 context = dict(self.parent.python_obj.__dict__)
                 exec(source, self.parent.module.python_obj.__dict__, context)
-                self.parent.set_attr(self.obj.name, context[self.obj.name])
+                fixed_python_obj = context[self.obj.name]
+                self.fixed_obj.python_obj = fixed_python_obj
+                self.parent.set_attr(self.obj.name, fixed_python_obj)
             else:
                 exec(source, self.parent.module.python_obj.__dict__)
+                fixed_python_obj = self.parent.module.python_obj.__dict__[self.obj.name]
+                self.fixed_obj.python_obj = fixed_python_obj
+
+            self.parent.module.register_obj(self.fixed_obj)
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
         if name == "__all__":
@@ -380,12 +422,14 @@ class Method(Function):
     class Add(Function.Add):
         obj: "Method"
         parent: "Class"
+        fixed_obj: "Method" = field(init=False)
 
         def execute(self) -> None:
             fun, code = self.obj.get_fixed_fun(self.obj, self.parent)
-            self.obj.python_obj = fun
-            self.obj.python_obj.__code__ = code
-            setattr(self.parent.python_obj, self.obj.name, self.obj.python_obj)
+            self.fixed_obj = copy(self.obj)
+            self.fixed_obj.python_obj = fun
+            self.fixed_obj.python_obj.__code__ = code
+            setattr(self.parent.python_obj, self.obj.name, self.fixed_obj.python_obj)
 
     class Update(Function.Update):
         obj: "Method"
@@ -538,14 +582,6 @@ class Dictionary(ContainerObj):
 
     def get_dict(self) -> "OrderedDict[str, Any]":
         return self.python_obj
-
-    def _python_obj_to_obj_classes(
-        self, name: str, obj: Any
-    ) -> Dict[str, Type[Object]]:
-        if isinstance(obj, dict):
-            return {name: Dictionary}
-
-        return {name: DictionaryItem}
 
     def set_attr(self, name: str, obj: "Any") -> None:
         self.python_obj[name] = obj
@@ -701,9 +737,9 @@ class Iterable(ContainerObj, ABC):
     def _collect_children(self) -> None:
         for i, o in enumerate(self.python_obj):
             name = str(i)
-            candidate = self._get_candidate(name=name, obj=o)
-            if candidate:
-                self.children.update(candidate.content)
+            won_candidate = self._get_winning_candidate(name=name, obj=o)
+            if won_candidate:
+                self._add_candidate(won_candidate)
 
     @classmethod
     def get_parent_classes(cls) -> List[Type["ContainerObj"]]:

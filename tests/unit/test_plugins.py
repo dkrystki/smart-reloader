@@ -3,7 +3,6 @@ from pytest import raises
 
 from tests import utils
 from tests.utils import Module, Reloader, Config
-from smartreload import dependency_watcher
 
 
 @pytest.mark.run(order=1)
@@ -21,6 +20,7 @@ class TestPlugins(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, 'module.pd: Import', 'module.df1: Dataframe', 'module.df2: Dataframe')
 
         module.rewrite(
             """
@@ -31,5 +31,6 @@ class TestPlugins(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.pd: Import', 'module.df1: Dataframe', 'module.df2: Dataframe')
 
         reloader.assert_actions('Update Module: module', 'Update Pandas.Dataframe: module.df2')

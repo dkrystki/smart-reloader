@@ -15,7 +15,7 @@ from smartreload import PartialReloader, console
 from smartreload.misc import is_linux
 from smartreload.exceptions import FullReloadNeeded
 
-logger = getLogger("Reloader")
+logger = getLogger("smartreload")
 logger.setLevel(logging.INFO)
 
 

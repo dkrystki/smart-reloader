@@ -46,6 +46,9 @@ class BaseAction:
     def execute(self) -> None:
         raise NotImplementedError()
 
+    def post_execute(self):
+        pass
+
     def pre_execute(self) -> None:
         self.reloader.applied_actions.append(self)
         self.log()
@@ -62,16 +65,23 @@ class Object(ABC):
     class Add(Action):
         parent: "ContainerObj"
         obj: "Object"
+        fixed_obj: "Object" = field(init=False)
 
         def __repr__(self) -> str:
             return f"Add {repr(self.obj)}"
 
         def execute(self) -> None:
-            self.parent.set_attr(self.obj.name, self.obj.python_obj)
+            self.fixed_obj = copy(self.obj)
+            self.fixed_obj.python_obj = self.obj.get_fixed_reference(self.parent.module)
+            self.parent.set_attr(self.obj.name, self.fixed_obj.python_obj)
+
+        def post_execute(self):
+            self.parent.module.register_obj(self.fixed_obj)
 
         def rollback(self) -> None:
             super().rollback()
             self.parent.del_attr(self.obj.name)
+            self.parent.module.unregister_obj(self.fixed_obj)
 
     @dataclass(repr=False)
     class Update(Action):
@@ -188,7 +198,7 @@ class Object(ABC):
             self.parent.set_attr(self.obj.name, self.obj.python_obj)
 
     @dataclass(repr=False)
-    class Candidates:
+    class Candidate:
         rank: int
         content: Dict[str, "Object"]
 
@@ -203,20 +213,24 @@ class Object(ABC):
 
     namespace: ClassVar[str] = ""
 
-    def __post_init__(self) -> None:
-        self.module.register_obj(self)
-
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
         raise NotImplementedError()
 
     @classmethod
-    def get_candidates(cls, name: str, obj: Any, potential_parent: "ContainerObj",
-                       module: "Module", reloader: "PartialReloader") -> Optional["Object.Candidates"]:
+    def get_candidate_content(cls, name: str, obj: Any, potential_parent: "ContainerObj",
+                         module: "Module", reloader: "PartialReloader") -> Dict[str, "Object"]:
+        ret = {name: cls(python_obj=obj, name=name, parent=potential_parent,
+                                         reloader=reloader, module=module)}
+        return ret
+
+    @classmethod
+    def get_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj",
+                      module: "Module", reloader: "PartialReloader") -> Optional["Object.Candidate"]:
         if cls.is_candidate(name=name, obj=obj, potential_parent=potential_parent):
-            return cls.Candidates(rank=cls.get_rank(),
-                                   content={name: cls(python_obj=obj, name=name, parent=potential_parent,
-                                                                 reloader=reloader, module=module)})
+            return cls.Candidate(rank=cls.get_rank(),
+                            content=cls.get_candidate_content(name, obj, potential_parent, module, reloader))
+
         else:
             return None
 
@@ -455,7 +469,6 @@ class ContainerObj(Object, ABC):
     children: Dict[str, "Object"] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
-        super().__post_init__()
         self._collect_children()
 
     def get_dict(self) -> "OrderedDict[str, Any]":
@@ -469,20 +482,26 @@ class ContainerObj(Object, ABC):
         ret = self.reloader.object_classes_manager.obj_class_to_children_classes[self.__class__]
         return ret
 
-    def _get_candidate(self, name: str, obj: Any) -> Optional[Object.Candidates]:
+    def _get_winning_candidate(self, name: str, obj: Any) -> Optional[Object.Candidate]:
         all_candidates = []
         for c in self.child_classes:
-            candidates = c.get_candidates(name, obj, potential_parent=self, module=self.module,
-                                               reloader=self.reloader)
-            if not candidates:
+            candidate = c.get_candidate(name, obj, potential_parent=self, module=self.module,
+                                         reloader=self.reloader)
+            if not candidate:
                 continue
-            all_candidates.append(candidates)
+            all_candidates.append(candidate)
 
         candidates = sorted(all_candidates, key=lambda x: x.rank)
         if candidates:
             return candidates[-1]
 
         return None
+
+    def _add_candidate(self, candidate: Object.Candidate) -> None:
+        self.children.update(candidate.content)
+
+        for o in candidate.content.values():
+            self.module.register_obj(o)
 
     def _collect_children(self) -> None:
         for n, o in self.get_dict().items():
@@ -493,9 +512,10 @@ class ContainerObj(Object, ABC):
             if any(o is p for p in self.get_parents_obj_flat() + [self.python_obj]):
                 continue
 
-            candidate = self._get_candidate(name=n, obj=o)
-            if candidate:
-                self.children.update(candidate.content)
+            won_candidate = self._get_winning_candidate(name=n, obj=o)
+
+            if won_candidate:
+                self._add_candidate(won_candidate)
 
     @property
     def source(self) -> str:

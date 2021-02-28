@@ -24,6 +24,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -41,6 +42,8 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions('Update Module: module', 'DeepUpdate Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating round cupcake"
@@ -69,6 +72,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -86,6 +90,8 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
+
         reloader.assert_actions('Update Module: module', 'DeepUpdate Method: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating a beautiful cupcake"
@@ -115,6 +121,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -131,6 +138,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'DeepUpdate StaticMethod: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating red cupcake"
@@ -166,6 +174,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -199,6 +208,7 @@ class TestClassesDeepReload(utils.TestBase):
 
         # assert_not_reloaded()
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'DeepUpdate ClassMethod: module.Cupcake.eat')
 
         assert module.device.Cupcake().eat() == "Eating red cupcake"
@@ -230,6 +240,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         module.load()
+        reloader.assert_objects(module, '')
 
         module.rewrite(
             """
@@ -246,6 +257,7 @@ class TestClassesDeepReload(utils.TestBase):
         )
 
         reloader.reload(module)
+        reloader.assert_objects(module, '')
         reloader.assert_actions('Update Module: module', 'DeepUpdate Method: module.Cupcake.how_many_eat')
 
         assert module.device.Cupcake().how_many_eat() == 11

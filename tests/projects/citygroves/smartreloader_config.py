@@ -2,8 +2,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, List
 
-from smartreload import BaseConfig, smart_django
-from smartreload.partialreloader import FullReloadNeeded
+from smartreload import BaseConfig
+from smartreload.plugins import smart_django
 
 if TYPE_CHECKING:
     from smartreload.partialreloader import Action
