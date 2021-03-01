@@ -265,12 +265,19 @@ class TestModules(utils.TestBase):
         """,
         )
         init.load()
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
-
         slave_module.load_from(init)
         module.load_from(init)
+
+        def assert_not_reloaded():
+            reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+            reloader.assert_objects(slave_module, 'sandbox.slave_module.Optional: Foreigner',
+                                                  'sandbox.slave_module.slave_var: Variable')
+            reloader.assert_objects(module, 'sandbox.module.master_var: Variable')
+            init.assert_not_changed()
+            slave_module.assert_not_changed()
+            module.assert_not_changed()
+
+        assert_not_reloaded()
 
         module.rewrite(
             """
@@ -279,16 +286,15 @@ class TestModules(utils.TestBase):
         """
         )
         reloader.reload(module)
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+        reloader.assert_objects(slave_module, 'sandbox.slave_module.Optional: Foreigner',
+                                              'sandbox.slave_module.slave_var: Variable')
+        reloader.assert_objects(module, 'sandbox.module.Optional: Foreigner', 'sandbox.module.master_var: Variable')
 
         reloader.assert_actions('Update Module: sandbox.module', 'Add Foreigner: sandbox.module.Optional')
 
         reloader.rollback()
-        init.assert_not_changed()
-        slave_module.assert_not_changed()
-        module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_update__all__(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -321,9 +327,18 @@ class TestModules(utils.TestBase):
         slave_module.load_from(init)
         module.load_from(init)
 
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        def assert_not_reloaded():
+            reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+            reloader.assert_objects(slave_module, 'sandbox.slave_module.__all__: All',
+                                                  'sandbox.slave_module.tesla_car_1: Variable',
+                                                  'sandbox.slave_module.tesla_car_2: Variable',
+                                                  'sandbox.slave_module.tesla_car_3: Variable')
+            reloader.assert_objects(module, 'sandbox.module.tesla_car_1: Foreigner')
+            init.assert_not_changed()
+            slave_module.assert_not_changed()
+            module.assert_not_changed()
+
+        assert_not_reloaded()
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_not_in("tesla_car_2")
@@ -335,9 +350,14 @@ class TestModules(utils.TestBase):
         )
 
         reloader.reload(slave_module)
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+        reloader.assert_objects(slave_module, 'sandbox.slave_module.__all__: All',
+                                              'sandbox.slave_module.tesla_car_1: Variable',
+                                              'sandbox.slave_module.tesla_car_2: Variable',
+                                              'sandbox.slave_module.tesla_car_3: Variable')
+        reloader.assert_objects(module, 'sandbox.module.tesla_car_1: Foreigner',
+                                        'sandbox.module.tesla_car_2: Foreigner',
+                                        'sandbox.module.tesla_car_3: Foreigner')
 
         reloader.assert_actions('Add Foreigner: sandbox.module.tesla_car_2',
  'Add Foreigner: sandbox.module.tesla_car_3',
@@ -352,9 +372,7 @@ class TestModules(utils.TestBase):
         module.assert_obj_in("tesla_car_3")
 
         reloader.rollback()
-        init.assert_not_changed()
-        slave_module.assert_not_changed()
-        module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_add__all__(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -386,9 +404,19 @@ class TestModules(utils.TestBase):
         slave_module.load_from(init)
         module.load_from(init)
 
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        def assert_not_reloaded():
+            reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+            reloader.assert_objects(slave_module, 'sandbox.slave_module.tesla_car_1: Variable',
+                                                  'sandbox.slave_module.tesla_car_2: Variable',
+                                                  'sandbox.slave_module.tesla_car_3: Variable')
+            reloader.assert_objects(module, 'sandbox.module.tesla_car_1: Foreigner',
+                                            'sandbox.module.tesla_car_2: Foreigner',
+                                            'sandbox.module.tesla_car_3: Foreigner')
+            slave_module.assert_not_changed()
+            module.assert_not_changed()
+            init.assert_not_changed()
+
+        assert_not_reloaded()
 
         module.assert_obj_in("tesla_car_1")
         module.assert_obj_in("tesla_car_2")
@@ -398,9 +426,12 @@ class TestModules(utils.TestBase):
 
         reloader.reload(slave_module)
 
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+        reloader.assert_objects(slave_module, 'sandbox.slave_module.__all__: All',
+                                              'sandbox.slave_module.tesla_car_1: Variable',
+                                              'sandbox.slave_module.tesla_car_2: Variable',
+                                              'sandbox.slave_module.tesla_car_3: Variable')
+        reloader.assert_objects(module, 'sandbox.module.tesla_car_1: Foreigner')
 
         reloader.assert_actions('Add All: sandbox.slave_module.__all__',
                                  'Delete Foreigner: sandbox.module.tesla_car_2',
@@ -415,9 +446,7 @@ class TestModules(utils.TestBase):
         module.assert_obj_not_in("tesla_car_3")
 
         reloader.rollback()
-        slave_module.assert_not_changed()
-        module.assert_not_changed()
-        init.assert_not_changed()
+        assert_not_reloaded()
 
     def test_delete__all__(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -450,20 +479,32 @@ class TestModules(utils.TestBase):
         slave_module.load_from(init)
         module.load_from(init)
 
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        def assert_not_reloaded():
+            reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+            reloader.assert_objects(slave_module, 'sandbox.slave_module.__all__: All',
+                                                  'sandbox.slave_module.tesla_car_1: Variable',
+                                                  'sandbox.slave_module.tesla_car_2: Variable',
+                                                  'sandbox.slave_module.tesla_car_3: Variable')
+            reloader.assert_objects(module, 'sandbox.module.tesla_car_1: Foreigner')
+            module.assert_obj_in("tesla_car_1")
+            module.assert_obj_not_in("tesla_car_2")
+            module.assert_obj_not_in("tesla_car_3")
+            init.assert_not_changed()
+            module.assert_not_changed()
+            slave_module.assert_not_changed()
 
-        module.assert_obj_in("tesla_car_1")
-        module.assert_obj_not_in("tesla_car_2")
-        module.assert_obj_not_in("tesla_car_3")
+        assert_not_reloaded()
 
         slave_module.replace('__all__ = ["tesla_car_1"]', "")
 
         reloader.reload(slave_module)
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+        reloader.assert_objects(slave_module, 'sandbox.slave_module.tesla_car_1: Variable',
+ 'sandbox.slave_module.tesla_car_2: Variable',
+ 'sandbox.slave_module.tesla_car_3: Variable')
+        reloader.assert_objects(module, 'sandbox.module.tesla_car_1: Foreigner',
+ 'sandbox.module.tesla_car_2: Foreigner',
+ 'sandbox.module.tesla_car_3: Foreigner')
 
         reloader.assert_actions('Add Foreigner: sandbox.module.tesla_car_2',
              'Add Foreigner: sandbox.module.tesla_car_3',
@@ -478,9 +519,7 @@ class TestModules(utils.TestBase):
         module.assert_obj_in("tesla_car_3")
 
         reloader.rollback()
-        init.assert_not_changed()
-        module.assert_not_changed()
-        slave_module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_delete_star_import(self, sandbox):
         reloader = Reloader(sandbox.parent)
@@ -519,7 +558,7 @@ class TestModules(utils.TestBase):
                                                   'sandbox.slave_module.tesla_car_1: Variable',
                                                   'sandbox.slave_module.tesla_car_2: Variable',
                                                   'sandbox.slave_module.tesla_car_3: Variable')
-            reloader.assert_objects(module, '')
+            reloader.assert_objects(module, 'sandbox.module.tesla_car_1: Foreigner')
             module.assert_obj_in("tesla_car_1")
             module.assert_obj_not_in("tesla_car_2")
             module.assert_obj_not_in("tesla_car_3")
@@ -531,9 +570,12 @@ class TestModules(utils.TestBase):
 
         module.rewrite("")
         reloader.reload(module)
-        reloader.assert_objects(init, '')
-        reloader.assert_objects(slave_module, '')
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(init, 'sandbox.module: Import', 'sandbox.slave_module: Import')
+        reloader.assert_objects(slave_module, 'sandbox.slave_module.__all__: All',
+ 'sandbox.slave_module.tesla_car_1: Variable',
+ 'sandbox.slave_module.tesla_car_2: Variable',
+ 'sandbox.slave_module.tesla_car_3: Variable')
+        reloader.assert_objects(module)
 
         reloader.assert_actions('Update Module: sandbox.module',
  'Delete Foreigner: sandbox.module.tesla_car_1')
@@ -543,7 +585,7 @@ class TestModules(utils.TestBase):
         module.assert_obj_not_in("tesla_car_3")
 
         reloader.rollback()
-
+        assert_not_reloaded()
 
     def test_star_import_add_obj(self, sandbox):
         reloader = Reloader(sandbox.parent)

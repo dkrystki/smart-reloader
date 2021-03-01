@@ -731,8 +731,10 @@ class Iterable(ContainerObj, ABC):
         obj: "ListObj"
         new_obj: Optional["ListObj"]
         parent: "ContainerObj"
+        original_content: list
 
         def execute(self) -> None:
+            self.original_content = self.obj.python_obj[:]
             self.obj.python_obj.clear()
             self.new_obj.fix_reference(self.obj.module)
             self.obj.python_obj.extend(self.new_obj.python_obj)
@@ -752,6 +754,14 @@ class Iterable(ContainerObj, ABC):
 @dataclass(repr=False)
 class ListObj(Iterable):
     python_obj: list
+
+    class Update(Iterable.Update):
+        original_content: list
+
+        def rollback(self) -> None:
+            super().rollback()
+            self.obj.python_obj.clear()
+            self.obj.python_obj.extend(self.original_content)
 
     def fix_reference(self, module: "Module") -> Any:
         self.python_obj.clear()

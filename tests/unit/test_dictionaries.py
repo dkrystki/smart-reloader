@@ -240,10 +240,14 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, '')
 
         def assert_not_reloaded():
             assert module.device.cake_shop["clients"] is None
+            module.assert_not_changed()
+            reloader.assert_objects(module, 'module.cake_shop.cakes: DictionaryItem',
+                                    'module.cake_shop.clients: DictionaryItem',
+                                    'module.cake_shop.cupcakes: DictionaryItem',
+                                    'module.cake_shop: Dictionary')
 
         assert_not_reloaded()
 
@@ -259,14 +263,18 @@ class TestDictionaries(utils.TestBase):
         """)
 
         reloader.reload(module)
-        reloader.assert_objects(module, '')
+        reloader.assert_objects(module, 'module.cake_shop.cakes: DictionaryItem',
+                                        'module.cake_shop.clients.complains: DictionaryItem',
+                                        'module.cake_shop.clients.number: DictionaryItem',
+                                        'module.cake_shop.clients: Dictionary',
+                                        'module.cake_shop.cupcakes: DictionaryItem',
+                                        'module.cake_shop: Dictionary')
         reloader.assert_actions('Update Module: module', 'Update DictionaryItem: module.cake_shop.clients')
 
         assert module.device.cake_shop["clients"]["number"] == 12
 
         reloader.rollback()
         assert_not_reloaded()
-        module.assert_not_changed()
 
     def test_dynamically_created(self, sandbox):
         reloader = Reloader(sandbox)
