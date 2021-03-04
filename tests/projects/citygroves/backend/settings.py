@@ -167,7 +167,7 @@ LOGGING = {
             'handlers': ['console'],
             'level': "INFO",
         },
-        "smartreload": {
+        "smart-reloader": {
         "handlers": ["console"],
         "level": "DEBUG",
         },

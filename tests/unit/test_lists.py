@@ -1,12 +1,12 @@
 import pytest
 
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestLists(utils.TestBase):
     def test_basic(self, sandbox, capsys):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -46,7 +46,7 @@ class TestLists(utils.TestBase):
         assert_not_reloaded()
 
     def test_nested(self, sandbox, capsys):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -95,7 +95,7 @@ class TestLists(utils.TestBase):
         assert_not_reloaded()
 
     def test_fixes_references(self, sandbox, capsys):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -182,7 +182,7 @@ class TestLists(utils.TestBase):
         assert_not_reloaded()
 
     def test_tuples(self, sandbox, capsys):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",

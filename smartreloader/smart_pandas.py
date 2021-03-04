@@ -3,7 +3,7 @@ from typing import Any, List
 
 import pandas as pd
 
-from smartreload.objects import ContainerObj, UserObject, Object
+from smartreloader.objects import ContainerObj, UserObject, Object
 
 
 class Dataframe(UserObject):

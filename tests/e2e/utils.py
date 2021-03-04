@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
@@ -8,8 +9,14 @@ from typing import Callable, List, Optional, Type
 
 import pyte
 from rhei import Stopwatch
+from stickybeak import Injector
 
-TIMEOUT = 2
+from smartreloader.e2e import STICKYBEAK_PORT
+
+TIMEOUT = 3
+
+
+injector = Injector(address=f"http://localhost:{STICKYBEAK_PORT}", download_deps=False)
 
 
 class AssertInTime:
@@ -85,8 +92,25 @@ class Expecter:
                 )
 
 
-class SmartReload:
+class SmartReloader:
     process: Optional[Popen] = None
+
+    @injector.klass
+    class Remote:
+        @classmethod
+        def get_applied_actions(cls) -> List[str]:
+            applied_actions = [str(a) for a in reloader.partial_reloader.applied_actions]
+            return applied_actions
+
+        @classmethod
+        def resume(cls) -> List[str]:
+            from smartreloader.e2e import Debugger
+            Debugger.resume()
+
+        @classmethod
+        def wait_unit_paused(cls) -> List[str]:
+            from smartreloader.e2e import Debugger
+            Debugger.wait_until_paused()
 
     def __init__(self):
         self.screen = pyte.Screen(200, 50)
@@ -101,9 +125,12 @@ class SmartReload:
 
         environ = os.environ.copy()
         environ["PYTHONUNBUFFERED"] = "True"
+        environ["SMART_RELOADER_E2E_TEST"] = "True"
+
+        # Add project root to python path so we can import test modules
 
         self.process = Popen(
-            f"python -m smartreload.entrypoint {command}".split(),
+            f"python -m smartreloader.entrypoint {command}".split(),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
@@ -112,6 +139,8 @@ class SmartReload:
 
         self.output_collector.start()
         self.expecter = Expecter(self)
+
+        injector.connect()
         return self.expecter
 
     def exit(self) -> None:
@@ -123,6 +152,9 @@ class SmartReload:
             return
 
         self.send("\x04", expect=False)
+
+    def remote(self) -> Type["SmartReloader.Remote"]:
+        return SmartReloader.Remote
 
     def on_exit(self) -> None:
         self.exit()

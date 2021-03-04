@@ -38,7 +38,7 @@ class EnvoLocalEnv(UserEnv):  # type: ignore
         emoji: str = "🐣"
         parents: List[str] = ["env_comm.py"]
         plugins: List[Plugin] = [VirtualEnv]
-        name: str = "smartreload"
+        name: str = "smart-reloader"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []

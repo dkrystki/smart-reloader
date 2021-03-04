@@ -1,12 +1,12 @@
 import pytest
 
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestMisc(utils.TestBase):
     def test_syntax_error(self, sandbox, capsys):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -27,7 +27,7 @@ class TestMisc(utils.TestBase):
             reloader.reload(module)
 
     def test_other_error(self, sandbox, capsys):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",

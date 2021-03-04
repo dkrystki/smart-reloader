@@ -11,10 +11,15 @@ from time import sleep
 from typing import List, Optional
 import uuid
 
+from smartreloader import e2e
 
-class SmartReload:
+
+class SmartReloader:
     def __init__(self):
-        self.seed_file = Path(f"__smartreload_{uuid.uuid4()}__.py")
+        self.seed_file = Path(f"__smartreloader_{uuid.uuid4()}__.py")
+
+        if e2e.enabled:
+            self.seed_file = Path(f"__smartreloader__.py")
 
     def create_seed(
         self, root: Path, entry_point_file: Path, argv: List[str], is_binary: bool
@@ -29,9 +34,10 @@ class SmartReload:
         import importlib
         import sys
         from pathlib import Path
+        import builtins
         
-        from smartreload import dependency_watcher
-        from smartreload.misc import import_from_file
+        from smartreloader import dependency_watcher
+        from smartreloader.misc import import_from_file
         
         sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
         
@@ -40,18 +46,22 @@ class SmartReload:
         if config_file.exists():
             config = import_from_file(config_file, package_root=Path(".")).Config()
         else:
-            from smartreload.config import BaseConfig
+            from smartreloader.config import BaseConfig
             config = BaseConfig()
         
-        from smartreload.reloader import Reloader
+        from smartreloader.reloader import Reloader
         
-        Reloader("{str(root)}", config).start()
+        reloader = Reloader("{str(root)}", config)
+        builtins.reloader = reloader
         
-        loader = dependency_watcher.MyLoader("__main__", "{str(entry_point_file)}")
-        spec = importlib.util.spec_from_loader("__main__", loader)
-        module = importlib.util.module_from_spec(spec)
-        {set_module}
-        loader.exec_module(module)
+        if __name__ == "__main__":
+            reloader.start()
+            
+            loader = dependency_watcher.MyLoader("__main__", "{str(entry_point_file)}")
+            spec = importlib.util.spec_from_loader("__main__", loader)
+            module = importlib.util.module_from_spec(spec)
+            {set_module}
+            loader.exec_module(module)
         """
         self.seed_file.write_text(dedent(source))
 
@@ -105,7 +115,9 @@ class SmartReload:
             is_binary=True,
         )
 
-        self.remove_seed()
+        if not e2e.enabled:
+            self.remove_seed()
+
         proc = subprocess.Popen(["python", str(self.seed_file.name)])
 
         def signal_handler(sig, frame):
@@ -132,7 +144,8 @@ class SmartReload:
 
 
 def _main() -> None:
-    SmartReload().main()
+    while True:
+        SmartReloader().main()
 
 
 if __name__ == "__main__":

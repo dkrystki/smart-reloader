@@ -15,18 +15,18 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type, TYPE_CHECKING,
-)
+    Type, )
 
 from . import dependency_watcher, objects
-from .base_objects import Object, BaseAction
+from smartreloader.objects.base_objects import Object, BaseAction
 
 from .config import BaseConfig
 
 
 __all__ = ["PartialReloader"]
 
-from .modules import ModuleDescriptor, Modules, UpdateModule
+from smartreloader.objects.modules import ModuleDescriptor, Modules, UpdateModule
+from .objects import Stack
 
 
 @dataclass
@@ -51,7 +51,6 @@ class ObjectClassesManager:
 
     def _collect_object_classes(self) -> None:
         self.object_classes = []
-        self._collect_object_classes_from_context(objects.__dict__)
         for p in self.reloader.plugins:
             self._collect_object_classes_from_context(p.__dict__)
 
@@ -104,6 +103,8 @@ class PartialReloader:
         self.modules = Modules(self, sys.modules)
         sys.modules = self.modules
         dependency_watcher.enable()
+
+        self.add_plugin(objects)
 
         for p in self.config.plugins():
             self.add_plugin(p)
@@ -165,10 +166,13 @@ class PartialReloader:
         self.reset()
         self._collect_all_dependencies()
 
-        action = UpdateModule(reloader=self,
-                               module_file=module_file)
-        action.pre_execute()
-        action.execute(dry_run)
+        update_module = UpdateModule(reloader=self,
+                                     module_file=module_file)
+        update_module.pre_execute()
+        update_module.execute(dry_run)
+
+        stack = Stack(logger=self.logger, module_file=module_file, reloader=self)
+        stack.update()
 
     def rollback(self) -> None:
         for a in reversed(self.applied_actions):

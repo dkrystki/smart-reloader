@@ -11,16 +11,16 @@ from globmatch import glob_match
 from watchdog.events import EVENT_TYPE_MODIFIED, FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
-from smartreload import PartialReloader, console
-from smartreload.misc import is_linux
-from smartreload.exceptions import FullReloadNeeded
+from smartreloader import PartialReloader, console
+from smartreloader.misc import is_linux
+from smartreloader.exceptions import FullReloadNeeded
 
-logger = getLogger("smartreload")
+logger = getLogger("smart-reloader")
 logger.setLevel(logging.INFO)
 
 
 if TYPE_CHECKING:
-    from smartreload.config import Config
+    from smartreloader.config import Config
 
 
 class Reloader(FileSystemEventHandler):
@@ -38,7 +38,7 @@ class Reloader(FileSystemEventHandler):
         watchdog.observers.inotify_buffer.logger.setLevel("INFO")
 
     def trigger_full_reload(self) -> None:
-        sys.exit(0)
+        os._exit(0)
 
     def matches(self, path: Path) -> bool:
         return not glob_match(str(path), self.config.ignored_paths) and glob_match(

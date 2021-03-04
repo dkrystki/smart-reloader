@@ -1,10 +1,10 @@
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestFunctions(utils.TestBase):
     def test_added_function(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -50,7 +50,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_modified_function(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -103,7 +103,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_deleted_function(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -143,7 +143,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_renamed_function(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -183,7 +183,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_uses_class(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -242,7 +242,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_uses_function(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -278,7 +278,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_uses_function_2(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -324,7 +324,7 @@ class TestFunctions(utils.TestBase):
         reloader.rollback()
 
     def test_uses_added_function(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -368,7 +368,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_add_closure(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -406,7 +406,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_edit_closure(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -446,7 +446,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_add_lambda(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -477,7 +477,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_edit_lambda(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -510,7 +510,7 @@ class TestFunctions(utils.TestBase):
         assert_not_reloaded()
 
     def test_moves_functions_first_lines(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -551,7 +551,7 @@ class TestFunctions(utils.TestBase):
         assert module.device.fun.__code__.co_firstlineno == 5
 
     def test_add_decorator(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",

@@ -1,10 +1,10 @@
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestGlobalVariable(utils.TestBase):
     def test_modified_global_var_with_dependencies(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -109,7 +109,7 @@ class TestGlobalVariable(utils.TestBase):
         boss.assert_not_changed()
 
     def test_modified_import_star(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -166,7 +166,7 @@ class TestGlobalVariable(utils.TestBase):
         car.assert_not_changed()
 
     def test_modified_import_star_nested_twice(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -237,7 +237,7 @@ class TestGlobalVariable(utils.TestBase):
         car.assert_not_changed()
 
     def test_added_global_var(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -268,7 +268,7 @@ class TestGlobalVariable(utils.TestBase):
         module.assert_not_changed()
 
     def test_fixes_class_references(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -302,7 +302,7 @@ class TestGlobalVariable(utils.TestBase):
         module.assert_not_changed()
 
     def test_fixes_function_references(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         module = Module(
             "module.py",
@@ -337,7 +337,7 @@ class TestGlobalVariable(utils.TestBase):
         module.assert_not_changed()
 
     def test_modified_global_var(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -434,7 +434,7 @@ class TestGlobalVariable(utils.TestBase):
         module.assert_not_changed()
 
     def test_deleted_global_var(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",

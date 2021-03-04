@@ -1,20 +1,13 @@
-import ctypes
-import gc
-import sys
-from time import sleep
-import timeit
-import inspect
-
 from pytest import raises
 
-from smartreload import FullReloadNeeded
+from smartreloader import FullReloadNeeded
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestClasses(utils.TestBase):
     def test_modified_class_variable_with_dependencies(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -81,7 +74,7 @@ class TestClasses(utils.TestBase):
         car.assert_not_changed()
 
     def test_modified_class_attr(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -160,7 +153,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_add_init_with_super(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -217,7 +210,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_modified_init_with_super(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -279,7 +272,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_add_base_class(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -324,7 +317,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_type_as_attribute(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -356,7 +349,7 @@ class TestClasses(utils.TestBase):
         assert_not_reloaded()
 
     def test_added_class(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -394,7 +387,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_recursion(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -414,7 +407,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_recursion_two_deep(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -443,7 +436,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_added_class_attr(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -496,7 +489,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_deleted_class_attr(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -549,7 +542,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_modified_classmethod(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -619,7 +612,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_modified_repr(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -659,7 +652,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_uses_other_classes(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -769,7 +762,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_modified_property(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -822,7 +815,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_modified_property_setter(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -861,7 +854,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_added_method(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -899,7 +892,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_delete_method(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -948,7 +941,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_edit_method_with_inheritance(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -989,7 +982,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_add_nested(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1033,7 +1026,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_modify_nested(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1092,7 +1085,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_delete_nested(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1137,7 +1130,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_class_changed_to_reference(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -1219,7 +1212,7 @@ class TestClasses(utils.TestBase):
         car.assert_not_changed()
 
     def test_only_reloads_user_defined(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -1266,7 +1259,7 @@ class TestClasses(utils.TestBase):
         reloader.assert_actions('Update Module: sandbox.cupcake')
 
     def test_method_with_list_comprehensions_twice(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1309,7 +1302,7 @@ class TestClasses(utils.TestBase):
         )
 
     def test_method_not_changed_should_not_reload(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1341,7 +1334,7 @@ class TestClasses(utils.TestBase):
         reloader.assert_actions('Update Module: module')
 
     def test_add_method_closure(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1381,7 +1374,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_edit_method_closure(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1423,7 +1416,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_add_lambda(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1458,7 +1451,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_edit_lambda(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1495,7 +1488,7 @@ class TestClasses(utils.TestBase):
         assert module.device.Cake.fun(5) == 15
 
     def test_add_staticmethod(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1532,7 +1525,7 @@ class TestClasses(utils.TestBase):
         module.assert_not_changed()
 
     def test_edit_staticmethod(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1578,7 +1571,7 @@ class TestClasses(utils.TestBase):
         assert module.device.Cake.eat() == "Eating"
 
     def test_import_external_class(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -1618,7 +1611,7 @@ class TestClasses(utils.TestBase):
         assert_not_reloaded()
 
     def test_moves_functions_first_lines_class_methods(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",

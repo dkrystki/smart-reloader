@@ -1,10 +1,10 @@
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestDictionaries(utils.TestBase):
     def test_change_value(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -31,7 +31,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_not_changed()
 
     def test_change_key(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -62,7 +62,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_not_changed()
 
     def test_change_key_and_value(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -93,7 +93,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_not_changed()
 
     def test_add(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -126,7 +126,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_not_changed()
 
     def test_delete(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -158,7 +158,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_not_changed()
 
     def test_rename(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -190,7 +190,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_not_changed()
 
     def test_nested(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -226,7 +226,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_not_changed()
 
     def test_nested_add(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -277,7 +277,7 @@ class TestDictionaries(utils.TestBase):
         assert_not_reloaded()
 
     def test_dynamically_created(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",

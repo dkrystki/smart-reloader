@@ -11,11 +11,11 @@ from typing import Any, Optional, Dict, List
 
 import pytest
 
-import smartreload
+import smartreloader
 
 logger = getLogger(__name__)
 
-from smartreload import dependency_watcher, misc
+from smartreloader import dependency_watcher, misc
 
 
 def load_module(name: str) -> Any:
@@ -69,7 +69,7 @@ class Module:
         self.path.write_text(self._fixed_source)
 
     def replace(self, what: str, to: str) -> None:
-        if what not in self.source:
+        if what not in self._fixed_source:
             raise WhatStringNotFound()
 
         self._fixed_source = self._fixed_source.replace(what, to)
@@ -111,6 +111,7 @@ class Module:
 @dataclass
 class Config:
     plugins: List[str] = field(default_factory=list)
+    e2e: bool = False
 
     filename = Path("smartreloader_config.py")
 
@@ -123,31 +124,45 @@ class Config:
         code = f"""
         from types import ModuleType
         from typing import List
+        import stickybeak
 
-        from smartreload import BaseConfig, smart_django, smart_pandas
+        from smartreloader import BaseConfig, smart_django, smart_pandas
+        from smartreloader import e2e
 
         class Config(BaseConfig):
+            def __init__(self):
+                self.e2e_enabled = {self.e2e}
+                self.stickybeak = None
+                if self.e2e_enabled:
+                    self.stickybeak = stickybeak.Server(e2e.project_root, e2e.STICKYBEAK_PORT)
+        
             def plugins(self) -> List[ModuleType]:
+                base_plugins = super().plugins()
                 return [{plugins_str}]
-
+                
+            def on_start(self, argv: List[str]) -> None:
+                if self.e2e_enabled:
+                    self.stickybeak.start()
+                    
         """
         self.filename.touch()
         self.filename.write_text(dedent(code))
 
 
 @dataclass
-class Reloader:
+class MockedPartialReloader:
     root: Path
-    device: smartreload.PartialReloader = field(init=False, default=None)
+
     config: Optional[Config] = None
+    device: smartreloader.PartialReloader = field(init=False, default=None)
 
     def __post_init__(self):
         if self.config:
             config = misc.import_from_file(self.config.filename, self.config.filename.parent, "test_config").Config()
         else:
-            config = smartreload.BaseConfig()
+            config = smartreloader.BaseConfig()
 
-        self.device = smartreload.PartialReloader(self.root, logger, config)
+        self.device = smartreloader.PartialReloader(self.root, logger, config)
 
     def reload(self, module: Module) -> None:
         self.device.reload(module.path)
@@ -160,10 +175,16 @@ class Reloader:
         if not ignore_order:
             assert actions_str == actions
         else:
-            assert sorted(actions_str) == sorted(actions)
+            assert sorted(actions_str) == sorted(actions), f"{actions_str} != {actions}"
 
     def assert_objects(self, module: Module, *objects: str) -> None:
         module_obj = self.device.modules.user_modules[str(module.path)][0].module_obj
 
         object_strs = module_obj.get_obj_strs()
         assert sorted(object_strs) == sorted(objects)
+
+
+@dataclass
+class Debugger:
+    port: int
+

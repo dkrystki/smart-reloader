@@ -2,9 +2,10 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, List
 
+from smartreloader import objects
 
 if TYPE_CHECKING:
-    from smartreload.partialreloader import Action
+    from smartreloader.partialreloader import Action
 
 
 class BaseConfig:
@@ -32,8 +33,8 @@ class BaseConfig:
             "**/.*",
             "**/*~",
             "**/__pycache__",
-            "**/__smartreload_*.py",
-            "**/smartreload_config.py",
+            "**/__smartreloader_*.py",
+            "**/smartreloader_config.py",
         ]
 
     @property
@@ -41,4 +42,4 @@ class BaseConfig:
         return ["**/*.py"]
 
     def plugins(self) -> List[ModuleType]:
-        return []
+        return [objects]

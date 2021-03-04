@@ -1,13 +1,13 @@
 from pytest import fixture
 
-from tests.e2e.utils import SmartReload
+from tests.e2e.utils import SmartReloader
 
 from . import utils
 
 
 @fixture
-def smartreload() -> SmartReload:
+def smartreloader() -> SmartReloader:
 
-    s = SmartReload()
+    s = SmartReloader()
     yield s
     s.on_exit()

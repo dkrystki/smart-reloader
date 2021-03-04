@@ -5,6 +5,8 @@ import os
 import re
 import sys
 import traceback
+from types import ModuleType
+
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
@@ -213,16 +215,20 @@ def path_to_module_name(path: Path, package_root: Path) -> str:
 
 
 def import_from_file(
-    path: Path, package_root: Path, module_name: Optional[str] = None
+    path: Path, package_root: Path, module_name: Optional[str] = None, add_to_sys_modules: bool = False
 ) -> Any:
     from . import dependency_watcher
     if not module_name:
         module_name = path_to_module_name(path, package_root)
+
     loader = dependency_watcher.MyLoader(module_name, str(path))
     spec = importlib.util.spec_from_loader(module_name, loader)
     module = importlib.util.module_from_spec(spec)
     dependency_watcher.clear_start_import_usages(str(path))
     loader.exec_module(module)
+
+    if add_to_sys_modules:
+        sys.modules[module_name] = module
 
     return module
 

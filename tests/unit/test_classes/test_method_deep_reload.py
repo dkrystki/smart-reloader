@@ -1,12 +1,12 @@
 from pytest import raises
 
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestClassesDeepReload(utils.TestBase):
     def test_change_to_classmethod(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -62,7 +62,7 @@ class TestClassesDeepReload(utils.TestBase):
         module.assert_not_changed()
 
     def test_change_to_staticmethod(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -123,7 +123,7 @@ class TestClassesDeepReload(utils.TestBase):
         assert_not_reloaded()
 
     def test_staticmethod_to_method(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -180,7 +180,7 @@ class TestClassesDeepReload(utils.TestBase):
         module.assert_not_changed()
 
     def test_change_from_classmethod_to_method(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -264,7 +264,7 @@ class TestClassesDeepReload(utils.TestBase):
         # assert module.device.Cupcake.eat() == "Eating round cupcake"
 
     def test_add_decorator(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",

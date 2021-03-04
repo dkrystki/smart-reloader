@@ -1,12 +1,12 @@
 from pytest import raises, mark
 
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module, MockedPartialReloader
 
 
 class TestModules(utils.TestBase):
     def test_import_relative(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -66,7 +66,7 @@ class TestModules(utils.TestBase):
         slave_module.assert_not_changed()
 
     def test_added_import(self, sandbox):
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -105,7 +105,7 @@ class TestModules(utils.TestBase):
         """
         We don't wanna remove imports because how python handles nested imports.
         """
-        reloader = Reloader(sandbox)
+        reloader = MockedPartialReloader(sandbox)
 
         module = Module(
             "module.py",
@@ -133,7 +133,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_add_relative(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -190,7 +190,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_error_rolls_back(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -240,7 +240,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_not_reloading_other_modules_for_foreign_objs(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -297,7 +297,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_update__all__(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -375,7 +375,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_add__all__(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -449,7 +449,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_delete__all__(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -522,7 +522,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_delete_star_import(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -588,7 +588,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_star_import_add_obj(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -649,7 +649,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_added_object_not_in_all(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",
@@ -711,7 +711,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_not_reloading_on_removed_star_import(self, sandbox):
-        reloader = Reloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox.parent)
 
         init = Module(
             "__init__.py",

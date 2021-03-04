@@ -52,13 +52,13 @@ def sandbox() -> Path:
 
 @fixture
 def is_windows():
-    from smartreload.misc import is_windows
+    from smartreloader.misc import is_windows
 
     return is_windows()
 
 
 @fixture
 def is_linux():
-    from smartreload.misc import is_linux
+    from smartreloader.misc import is_linux
 
     return is_linux()

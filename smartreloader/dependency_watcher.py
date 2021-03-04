@@ -23,6 +23,7 @@ from importlib.machinery import SourceFileLoader
 
 post_module_exec_hook: Optional[Callable] = None
 
+
 class MyLoader(SourceFileLoader):
     def exec_module(self, module: types.ModuleType) -> None:
         init_import(module)

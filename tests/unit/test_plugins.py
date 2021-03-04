@@ -2,13 +2,13 @@ import pytest
 from pytest import raises
 
 from tests import utils
-from tests.utils import Module, Reloader, Config
+from tests.utils import Module, MockedPartialReloader, Config
 
 
 @pytest.mark.run(order=1)
 class TestPlugins(utils.TestBase):
     def test_pandas_objs(self, sandbox, capsys):
-        reloader = Reloader(sandbox, config=Config(plugins=["smart_pandas"]))
+        reloader = MockedPartialReloader(sandbox, config=Config(plugins=["smart_pandas"]))
 
         module = Module(
             "module.py",

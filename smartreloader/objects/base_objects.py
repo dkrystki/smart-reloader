@@ -15,18 +15,18 @@ from typing import (
     Dict,
     List,
     Optional,
-    Type, TYPE_CHECKING,
-)
+    Type, TYPE_CHECKING, )
 
-from . import dependency_watcher
-
+from smartreloader import dependency_watcher, utils
 
 from dataclasses import dataclass
 
 
 if TYPE_CHECKING:
-    from . import PartialReloader
-    from .modules import Module
+    from smartreloader import PartialReloader
+    from smartreloader.objects.modules import Module
+
+__all__ = ["BaseAction", "Action", "Object", "FinalObj", "ContainerObj"]
 
 
 @dataclass
@@ -163,7 +163,7 @@ class Object(ABC):
 
                 # update frame
                 if inspect.isframe(r):
-                    self.apply_changes_to_frame(r)
+                    utils.apply_changes_to_frame(r)
 
         def execute(self) -> None:
             self.replace_obj(self.obj.python_obj, self.new_obj.python_obj)
@@ -173,12 +173,6 @@ class Object(ABC):
 
             for o in self.rollback_operations:
                 o.execute()
-
-        def apply_changes_to_frame(self, frame_obj: FrameType):
-            if inspect.isframe(frame_obj):
-                ctypes.pythonapi.PyFrame_LocalsToFast(
-                    ctypes.py_object(frame_obj),
-                    ctypes.c_int(1))
 
     @dataclass(repr=False)
     class Delete(Action):
@@ -395,7 +389,7 @@ class Object(ABC):
         module_descrs = sorted(module_descrs, key=lambda x: dependency_watcher.import_order.index(str(x.path)))
 
         for m_descr in module_descrs:
-            from smartreload.modules import UpdateModule
+            from smartreloader.objects.modules import UpdateModule
             ret.append(UpdateModule(reloader=self.reloader, module_file=m_descr.path))
 
         return ret
@@ -438,7 +432,7 @@ class Object(ABC):
             modules = self.reloader.modules.user_modules[module_path]
 
             for m in modules:
-                from smartreload.modules import UpdateModule
+                from smartreloader.objects.modules import UpdateModule
                 ret.append(UpdateModule(reloader=self.reloader, module_file=m.path))
 
         return ret

@@ -2,11 +2,11 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, List
 
-from smartreload import BaseConfig
-from smartreload.plugins import smart_django
+from smartreloader import BaseConfig
+from smartreloader.plugins import smart_django
 
 if TYPE_CHECKING:
-    from smartreload.partialreloader import Action
+    from smartreloader.partialreloader import Action
 
 
 class Config(BaseConfig):

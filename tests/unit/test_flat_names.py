@@ -1,6 +1,6 @@
-from smartreload.modules import Source
+from smartreloader.objects.modules import Source
 from tests import utils
-from tests.utils import Module, Reloader
+from tests.utils import Module
 
 
 class TestFlatNames(utils.TestBase):

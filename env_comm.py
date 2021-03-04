@@ -35,7 +35,7 @@ class EnvoCommEnv(UserEnv):  # type: ignore
         emoji: str = "👌"
         parents: List[str] = []
         plugins: List[Plugin] = []
-        name: str = "smartreload"
+        name: str = "smart-reloader"
         version: str = "0.1.0"
         watch_files: List[str] = []
         ignore_files: List[str] = []

@@ -12,17 +12,16 @@ from typing import (
     Dict,
     List,
     Optional,
-    Type, TYPE_CHECKING, Tuple,
-)
+    Type, TYPE_CHECKING, Tuple, )
 
-from . import misc
+from smartreloader import misc
 
 from dataclasses import dataclass
 
-from smartreload.base_objects import BaseAction, Object, ContainerObj
+from smartreloader.objects.base_objects import BaseAction, Object, ContainerObj
 
 if TYPE_CHECKING:
-    from .partialreloader import PartialReloader
+    from smartreloader.partialreloader import PartialReloader
 
 
 @dataclass
@@ -151,13 +150,10 @@ class ModuleDescriptor:
     path: Path
     body: ModuleType
     source: Source = field(init=False)
-    module_obj: "Module" = field(init=False)
+    module_obj: "Module" = field(init=False, default=None)
 
     def __post_init__(self):
         self.fetch_source()
-
-    def fetch_source(self) -> None:
-        self.source = Source(self.path)
 
     def post_execute(self):
         self.module_obj = Module(module_descriptor=self,
@@ -167,10 +163,13 @@ class ModuleDescriptor:
                                  reloader=self.reloader,
                                  module=None)
 
+    def fetch_source(self) -> None:
+        self.source = Source(self.path)
+
     def __hash__(self) -> int:
         return hash(self.name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
 
@@ -249,7 +248,13 @@ class UpdateModule(BaseAction):
         pydevd_tracing.TracingFunctionHolder._warn = False
 
     def execute(self, dry_run=False) -> None:
+        # in some instances module object can't be pre cached
+        # for example it's the entrypoint and still executing
+        if not self.module_descriptor.module_obj:
+            self.module_descriptor.post_execute()
+
         self.logger.debug("Old module: ")
+
         self.logger.debug("\n".join(self.module_descriptor.module_obj.get_obj_strs()))
         self.disable_pydev_warning()
 
@@ -263,6 +268,7 @@ class UpdateModule(BaseAction):
                                                  path=self.module_descriptor.path,
                                                  body=module_python_obj)
         new_module_descriptor.post_execute()
+
         self.logger.debug("New module: ")
         self.logger.debug("\n".join(new_module_descriptor.module_obj.get_obj_strs()))
 
