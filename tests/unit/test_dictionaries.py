@@ -244,10 +244,10 @@ class TestDictionaries(utils.TestBase):
         def assert_not_reloaded():
             assert module.device.cake_shop["clients"] is None
             module.assert_not_changed()
-            reloader.assert_objects(module, 'module.cake_shop.cakes: DictionaryItem',
-                                    'module.cake_shop.clients: DictionaryItem',
-                                    'module.cake_shop.cupcakes: DictionaryItem',
-                                    'module.cake_shop: Dictionary')
+            reloader.assert_objects(module, 'module.cake_shop: Dictionary',
+                                             'module.cake_shop.cakes: DictionaryItem',
+                                             'module.cake_shop.cupcakes: DictionaryItem',
+                                             'module.cake_shop.clients: DictionaryItem')
 
         assert_not_reloaded()
 
@@ -263,12 +263,12 @@ class TestDictionaries(utils.TestBase):
         """)
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.cake_shop.cakes: DictionaryItem',
-                                        'module.cake_shop.clients.complains: DictionaryItem',
-                                        'module.cake_shop.clients.number: DictionaryItem',
-                                        'module.cake_shop.clients: Dictionary',
+        reloader.assert_objects(module, 'module.cake_shop: Dictionary',
+                                        'module.cake_shop.cakes: DictionaryItem',
                                         'module.cake_shop.cupcakes: DictionaryItem',
-                                        'module.cake_shop: Dictionary')
+                                        'module.cake_shop.clients: Dictionary',
+                                        'module.cake_shop.clients.number: DictionaryItem',
+                                        'module.cake_shop.clients.complains: DictionaryItem')
         reloader.assert_actions('Update Module: module', 'Update DictionaryItem: module.cake_shop.clients')
 
         assert module.device.cake_shop["clients"]["number"] == 12
@@ -306,13 +306,13 @@ class TestDictionaries(utils.TestBase):
 
         reloader.assert_objects(module,
                                 'module.create_dict: Function',
+                                'module.cake_shop: Dictionary',
                                 'module.cake_shop.cakes: DictionaryItem',
                                 'module.cake_shop.cupcakes: DictionaryItem',
                                 'module.cake_shop.clients: DictionaryItem',
-                                'module.cake_shop.meta.shop_size_x: DictionaryItem',
-                                'module.cake_shop.meta.shop_size_y: DictionaryItem',
                                 'module.cake_shop.meta: Dictionary',
-                                'module.cake_shop: Dictionary')
+                                'module.cake_shop.meta.shop_size_x: DictionaryItem',
+                                'module.cake_shop.meta.shop_size_y: DictionaryItem')
 
         module.rewrite("""
         def create_dict():
@@ -336,15 +336,15 @@ class TestDictionaries(utils.TestBase):
 
         reloader.assert_objects(module,
                                 'module.create_dict: Function',
+                                'module.cake_shop: Dictionary',
                                 'module.cake_shop.cakes: DictionaryItem',
                                 'module.cake_shop.cupcakes: DictionaryItem',
                                 'module.cake_shop.clients: DictionaryItem',
+                                'module.cake_shop.meta: Dictionary',
                                 'module.cake_shop.meta.shop_size_x: DictionaryItem',
                                 'module.cake_shop.meta.shop_size_y: DictionaryItem',
-                                'module.cake_shop.meta: Dictionary',
-                                'module.cake_shop.extra_meta.employees: DictionaryItem',
                                 'module.cake_shop.extra_meta: Dictionary',
-                                'module.cake_shop: Dictionary')
+                                'module.cake_shop.extra_meta.employees: DictionaryItem')
 
         reloader.assert_actions('Update Module: module',
                                  'Update Function: module.create_dict',

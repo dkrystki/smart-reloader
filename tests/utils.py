@@ -181,7 +181,7 @@ class MockedPartialReloader:
         module_obj = self.device.modules.user_modules[str(module.path)][0].module_obj
 
         object_strs = module_obj.get_obj_strs()
-        assert sorted(object_strs) == sorted(objects)
+        assert object_strs == objects
 
 
 @dataclass

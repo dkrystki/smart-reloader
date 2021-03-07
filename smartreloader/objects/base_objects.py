@@ -459,7 +459,24 @@ class ContainerObj(Object, ABC):
     children: Dict[str, "Object"] = field(init=False, default_factory=dict)
 
     def get_dict(self) -> "OrderedDict[str, Any]":
-        raise NotImplementedError()
+        raw_dict = self.python_obj.__dict__
+        module_syntaxnames = list(self.module.module_descriptor.source.flat_syntax.keys())
+
+        # We'll fall back to alphabetical order if object is not in source (star imports etc)
+        pre_sorted_keys = sorted(list(raw_dict.keys()))
+
+        def get_obj_order(name: str) -> int:
+            if self.get_full_name_for_child(name) in module_syntaxnames:
+                # make priority higher for objects in source
+                return (module_syntaxnames.index(self.get_full_name_for_child(name))+1) * 10000
+            else:
+                return pre_sorted_keys.index(name)
+
+        sorted_keys = sorted(list(raw_dict.keys()), key=get_obj_order)
+
+        ret = OrderedDict({k: raw_dict[k] for k in sorted_keys})
+
+        return ret
 
     def _is_child_ignored(self, name: str, obj: Any) -> bool:
         return False
@@ -493,6 +510,8 @@ class ContainerObj(Object, ABC):
                 o.collect_children()
 
     def collect_children(self) -> None:
+        self.children = {}
+
         for n, o in self.get_dict().items():
             if self._is_child_ignored(n, o):
                 continue

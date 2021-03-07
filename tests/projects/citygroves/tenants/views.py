@@ -154,4 +154,3 @@ class AddressesViewset(
     queryset = models.Address.objects.all()
     serializer_class = serializers.AddressSerializer
 
-

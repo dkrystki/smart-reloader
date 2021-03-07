@@ -21,8 +21,7 @@ from dataclasses import dataclass
 
 from smartreloader.objects.base_objects import FinalObj, BaseAction, Object, ContainerObj
 from smartreloader.exceptions import FullReloadNeeded
-from smartreloader.objects.modules import Module
-
+from smartreloader.objects.modules import Module, Source
 
 if TYPE_CHECKING:
     from smartreloader.partialreloader import PartialReloader
@@ -45,7 +44,13 @@ class Foreigner(FinalObj):
 
     @classmethod
     def is_candidate(cls, name: str, obj: Any, potential_parent: "ContainerObj") -> bool:
-        ret = name not in potential_parent.module.module_descriptor.source.flat_syntax
+        non_foreign_objects = potential_parent.module.module_descriptor.source.flat_syntax.copy()
+
+        for n, t in non_foreign_objects.copy().items():
+            if isinstance(t, Source.Imported):
+                non_foreign_objects.pop(n)
+
+        ret = name not in non_foreign_objects
         return ret
 
     @classmethod
@@ -397,11 +402,6 @@ class Class(ContainerObj):
             return super().get_actions_for_update(new_obj)
         else:
             raise FullReloadNeeded()
-
-    def get_dict(self) -> "OrderedDict[str, Any]":
-        ret = OrderedDict(self.python_obj.__dict__)
-
-        return ret
 
     def _python_obj_to_obj_classes(
         self, name: str, obj: Any

@@ -38,6 +38,7 @@ class TestGlobalVariable(utils.TestBase):
             "accounting.py",
             """
         from .car import car_sprinklers
+        from . import car        
 
         sprinklers_from_accounting = car_sprinklers * 10
         """,
@@ -47,6 +48,7 @@ class TestGlobalVariable(utils.TestBase):
             "client.py",
             """
         from . import carwash
+        from . import car
 
         client_car_sprinklers = carwash.sprinkler_n / 3
         """,
@@ -73,9 +75,11 @@ class TestGlobalVariable(utils.TestBase):
         reloader.assert_objects(carwash, 'sandbox.carwash.sprinkler_n: Variable', 'sandbox.carwash.money: Variable')
         reloader.assert_objects(car, 'sandbox.car.sprinkler_n: Foreigner', 'sandbox.car.car_sprinklers: Variable')
         reloader.assert_objects(accounting, 'sandbox.accounting.car_sprinklers: Foreigner',
+                                            'sandbox.accounting.car: Import',
                                             'sandbox.accounting.sprinklers_from_accounting: Variable')
         reloader.assert_objects(client, 'sandbox.client.carwash: Import',
-                                         'sandbox.client.client_car_sprinklers: Variable')
+                                        'sandbox.client.car: Import',
+                                        'sandbox.client.client_car_sprinklers: Variable')
         reloader.assert_objects(boss, 'sandbox.boss.carwash: Import', 'sandbox.boss.actual_money: Variable')
 
         carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
@@ -98,6 +102,10 @@ class TestGlobalVariable(utils.TestBase):
         assert accounting.device.car_sprinklers == 2
         assert accounting.device.sprinklers_from_accounting == 20
         assert client.device.client_car_sprinklers == 2
+
+        assert id(init.device.car) == id(accounting.device.car)
+        assert id(init.device.carwash) == id(client.device.carwash)
+        assert id(init.device.car) == id(client.device.car)
 
         # Test rollback
         reloader.rollback()
@@ -366,14 +374,14 @@ class TestGlobalVariable(utils.TestBase):
         module.load()
         reloader.assert_objects(module, 'module.sprinkler_n: Variable',
                                         'module.some_fun: Function',
+                                        'module.sample_dict: Dictionary',
                                         'module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
                                         'module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
                                         'module.sample_dict.lambda_fun: DictionaryItem',
                                         'module.sample_dict.fun: Reference',
-                                        'module.sample_dict: Dictionary',
                                         'module.print_sprinkler: Function',
-                                        'module.Car.car_sprinkler_n: ClassVariable',
-                                        'module.Car: Class')
+                                        'module.Car: Class',
+                                        'module.Car.car_sprinkler_n: ClassVariable')
 
         print_sprinkler_id = id(module.device.print_sprinkler)
         lambda_fun_id = id(module.device.sample_dict["lambda_fun"])
@@ -400,14 +408,14 @@ class TestGlobalVariable(utils.TestBase):
         reloader.reload(module)
         reloader.assert_objects(module, 'module.sprinkler_n: Variable',
                                 'module.some_fun: Function',
+                                'module.sample_dict: Dictionary',
                                 'module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
                                 'module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
                                 'module.sample_dict.lambda_fun: DictionaryItem',
                                 'module.sample_dict.fun: Reference',
-                                'module.sample_dict: Dictionary',
                                 'module.print_sprinkler: Function',
-                                'module.Car.car_sprinkler_n: ClassVariable',
-                                'module.Car: Class')
+                                'module.Car: Class',
+                                'module.Car.car_sprinkler_n: ClassVariable')
 
         reloader.assert_actions(
             "Update Module: module",

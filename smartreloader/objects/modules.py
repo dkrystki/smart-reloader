@@ -1,6 +1,8 @@
 import ast
 import sys
+from abc import ABC
 from collections import OrderedDict, defaultdict
+from functools import lru_cache
 from logging import Logger
 
 from dataclasses import field
@@ -27,120 +29,294 @@ if TYPE_CHECKING:
 @dataclass
 class Source:
     path: Path
+
     content: str = field(init=False)
     syntax: ast.AST = field(init=False)
-    flat_syntax: List[str] = field(init=False)
 
     @dataclass
-    class NamedNode:
-        name: str
+    class Node(ABC):
         content: Optional[ast.AST]
-        parent: str
+        parent: Optional["Source.Node"]
 
-        def __repr__(self) -> str:
-            return self.full_name
+        children: Dict[str, "Source.Node"] = field(init=False, default_factory=dict)
+        name: str = field(init=False, default="")
+
+        type: ast.stmt = NotImplemented
 
         @property
-        def full_name(self) -> str:
-            ret = f"{self.parent}.{self.name}" if self.parent else self.name
-            return ret
+        def fullname(self) -> str:
+            return f"{self.parent.fullname}.{self.name}" if self.parent and self.parent.fullname else self.name
 
-        @classmethod
-        def _get_ast_name(cls, node: ast.AST) -> Optional[str]:
-            if isinstance(node, ast.Str):
-                return node.s
-
-            if isinstance(node, ast.Num):
-                return node.n
-
-            if isinstance(node, ast.Name):
-                return node.id
-
-            if isinstance(node, ast.ClassDef):
-                return node.name
-
-            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
-                return node.name
-
-            return None
-
-        def _get_child_nodes(self) -> List["Source.NamedNode"]:
-            if isinstance(self.content, ast.Module) or isinstance(self.content, ast.ClassDef):
-                return self._get_child_nodes_for_body()
-
-            if isinstance(self.content, ast.Dict):
-                return self._get_child_nodes_for_dict()
-
-            if isinstance(self.content, ast.List) or isinstance(self.content, ast.Tuple):
-                return self._get_child_nodes_for_iterable()
-
+        @property
+        def body(self) -> List[ast.stmt]:
             return []
 
-        def _get_child_nodes_for_body(self) -> List["Source.NamedNode"]:
-            nodes = []
+        def child_factory(self, ast_node: ast.stmt, parent: Optional["Source.Node"]) -> Optional["Source.Node"]:
+            node_type = Source.get_all_node_types().get(type(ast_node), None)
+            if not node_type:
+                return None
+            child = node_type(content=ast_node, parent=parent)
+            return child
 
-            for b in self.content.body:
-                if type(b) in [ast.Assign, ast.AnnAssign]:
-                    targets = b.targets if hasattr(b, "targets") else [b.target]
-                    for t in targets:
-                        if isinstance(t, ast.Tuple):
-                            for n in t.elts:
-                                nodes.append(Source.NamedNode(self._get_ast_name(n), b.value, self.full_name))
-                        else:
-                            nodes.append(Source.NamedNode(self._get_ast_name(t), b.value, self.full_name))
+        def add_to_parent(self, parent: "Source.Node") -> None:
+            parent.children[self.name] = self
+            self.process()
 
-                if isinstance(b, ast.ClassDef):
-                    nodes.append(Source.NamedNode(self._get_ast_name(b), b, self.full_name))
-                elif isinstance(b, ast.FunctionDef) or isinstance(b, ast.AsyncFunctionDef):
-                    nodes.append(Source.NamedNode(self._get_ast_name(b), None, self.full_name))
+        def process(self) -> None:
+            body = self.body
+            if not body:
+                return
 
-            return nodes
+            for b in self.body:
+                child = self.child_factory(b, self)
+                if not child:
+                    continue
 
-        def _get_child_nodes_for_dict(self) -> List["Source.NamedNode"]:
-            ret = []
+                child.add_to_parent(self)
+
+        def get_flat_syntax(self) -> 'OrderedDict[str, "Source.Node"]':
+            flat = OrderedDict()
+            for n, c in self.children.items():
+                flat[c.fullname] = c
+                flat.update(c.get_flat_syntax())
+
+            return flat
+
+        def get_flat_syntax_str(self) -> 'OrderedDict[str, str]':
+            ret = OrderedDict()
+            flat = self.get_flat_syntax()
+            for n, v in flat.items():
+                ret[n] = v.get_type_name()
+
+            return ret
+
+        def get_type_name(self) -> str:
+            return self.__class__.__name__
+
+    @dataclass
+    class Imported(Node):
+        types = [None]
+
+    @dataclass
+    class Import(Node):
+        types = [ast.Import]
+
+        def add_to_parent(self, parent: "Source.Node") -> None:
+            for n in self.content.names:
+                module = Source.Imported(content=None, parent=parent)
+                module.name = n.asname or n.name
+                parent.children[module.name] = module
+
+    @dataclass
+    class FromImport(Import):
+        types = [ast.ImportFrom]
+
+    @dataclass
+    class Class(Node):
+        types = [ast.ClassDef]
+
+        def __post_init__(self) -> None:
+            self.name = self.content.name
+
+        @property
+        def body(self) -> List[ast.stmt]:
+            return self.content.body
+
+    @dataclass
+    class DictType(Node):
+        types = [ast.Dict]
+
+        def process(self) -> None:
             for k, v in zip(self.content.keys, self.content.values):
-                ret.append(Source.NamedNode(self._get_ast_name(k), v, self.full_name))
+                key = self.child_factory(k, None)
+                value = self.child_factory(v, self)
+                value.name = key.name
+                self.children[key.name] = value
+                value.process()
 
-            return ret
+        def __str__(self) -> str:
+            return "Dict"
 
-        def _get_child_nodes_for_iterable(self) -> List["Source.NamedNode"]:
-            ret = []
+    @dataclass
+    class Module(Node):
+        types = [ast.Module]
+
+        def __post_init__(self) -> None:
+            self.name = ""
+
+        @property
+        def body(self) -> List[ast.stmt]:
+            return self.content.body
+
+    @dataclass
+    class Num(Node):
+        types = [ast.Num]
+
+        def __post_init__(self) -> None:
+            self.name = self.content.n
+
+    @dataclass
+    class NameConstant(Node):
+        types = [ast.NameConstant]
+
+        def __post_init__(self) -> None:
+            self.name = self.content.value
+
+    @dataclass
+    class Str(Node):
+        types = [ast.Str]
+
+        def __post_init__(self) -> None:
+            self.name = self.content.s
+
+    @dataclass
+    class Call(Node):
+        types = [ast.Call]
+
+
+    @dataclass
+    class FunctionDef(Node):
+        types = [ast.FunctionDef]
+
+        def __post_init__(self) -> None:
+            self.name = self.content.name
+
+    @dataclass
+    class Lambda(Node):
+        types = [ast.Lambda]
+
+    @dataclass
+    class Name(Node):
+        types = [ast.Name]
+
+        def __post_init__(self) -> None:
+            self.name = self.content.id
+
+    @dataclass
+    class Attribute(Node):
+        types = [ast.Attribute]
+
+    @dataclass
+    class Op(Node):
+        types = [ast.BinOp, ast.BoolOp, ast.UnaryOp]
+
+    @dataclass
+    class AssignPair:
+        left: "Source.Node"
+        right: "Source.Node"
+
+        def add_to_parent(self, parent: "Source.Node") -> None:
+            self.right.name = self.left.name
+            parent.children[self.left.name] = self.right
+            self.right.process()
+
+    @dataclass
+    class Assign(Node):
+        types = [ast.Assign]
+
+        def get_targets(self) -> List[ast.stmt]:
+            return self.content.targets
+
+        def process_target(self, target: ast.stmt, parent: "Source.Node") -> None:
+            target_obj = self.child_factory(target, None)
+            if not target_obj:
+                return
+            value_obj = self.child_factory(self.content.value, parent)
+
+            if isinstance(target_obj, Source.TupleType) and isinstance(value_obj, Source.TupleType):
+                zipped = zip(target_obj.body, value_obj.body)
+            elif isinstance(target_obj, Source.TupleType):
+                zipped = zip(target_obj.body, [value_obj.content]*len(target_obj.body))
+            else:
+                zipped = [(target_obj.content, value_obj.content)]
+
+            for l, r in zipped:
+                left = self.child_factory(l, None)
+                right = self.child_factory(r, parent)
+
+                pair = Source.AssignPair(left=left, right=right)
+                pair.add_to_parent(parent)
+
+        def add_to_parent(self, parent: "Source.Node") -> None:
+            for t in self.get_targets():
+                self.process_target(t, parent)
+
+        @property
+        def body(self) -> List[ast.stmt]:
+            return [self.content.value]
+
+    @dataclass
+    class AnnAssign(Assign):
+        types = [ast.AnnAssign]
+
+        def get_targets(self) -> List[ast.stmt]:
+            if self.content.value:
+                return [self.content.target]
+            else:
+                return []
+
+    @dataclass
+    class ListType(Node):
+        types = [ast.List]
+
+        def get_type_name(self) -> str:
+            return "List"
+
+        def process(self) -> None:
             for i, v in enumerate(self.content.elts):
-                name = str(i)
-                ret.append(Source.NamedNode(name, v, self.full_name))
+                value = self.child_factory(v, self)
+                value.name = str(i)
+                self.children[value.name] = value
+                value.process()
 
-            return ret
+    @dataclass
+    class TupleType(ListType):
+        types = [ast.Tuple]
 
-        def get_flat(self) -> List[str]:
-            ret = []
-            if self.full_name:
-                ret.append(self.full_name)
+        @property
+        def body(self) -> List[ast.stmt]:
+            return self.content.elts
 
-            for n in self._get_child_nodes():
-                ret.extend(n.get_flat())
+        def get_type_name(self) -> str:
+            return "Tuple"
 
-            return ret
+    flat_syntax: 'OrderedDict[str, Node]' = field(init=False)
+    flat_syntax_str: 'OrderedDict[str, str]' = field(init=False)
+    root_node: Node = field(init=False)
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def get_all_node_types(cls) -> Dict[ast.stmt, Type["Source.Node"]]:
+        ret = {}
+
+        for k, v in cls.__dict__.items():
+            if not isinstance(v, type):
+                continue
+
+            if not issubclass(v, Source.Node):
+                continue
+
+            if ABC in v.__bases__:
+                continue
+
+            for t in v.types:
+                ret[t] = v
+
+        return ret
 
     def __post_init__(self) -> None:
         self.content = self.path.read_text()
         self.syntax = ast.parse(self.content, str(self.path))
-        self.flat_syntax = []
-        self.flat_syntax = self._get_flat_container_names(self.syntax)
-        pass
 
-    def fetch_source(self):
-        self.source = Source(self.path)
+        node_types = self.get_all_node_types()
+        self.root_node = node_types[type(self.syntax)](content=self.syntax, parent=None)
+        self.root_node.process()
+
+        self.flat_syntax = self.root_node.get_flat_syntax()
+        self.flat_syntax_str = self.root_node.get_flat_syntax_str()
 
     def _get_namespaced_name(self, parent: str, name: str) -> str:
         return f"{parent}.{name}" if parent else name
-
-    def _get_flat_container_names(self, syntax: ast.AST) -> List[str]:
-        if not hasattr(syntax, "body"):
-            return []
-
-        parent_node = self.NamedNode("", self.syntax, "")
-        ret = parent_node.get_flat()
-        return ret
 
 
 @dataclass(repr=False)
@@ -152,10 +328,10 @@ class ModuleDescriptor:
     source: Source = field(init=False)
     module_obj: "Module" = field(init=False, default=None)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.fetch_source()
 
-    def post_execute(self):
+    def post_execute(self) -> None:
         self.module_obj = Module(module_descriptor=self,
                                  name=None,
                                  python_obj=self.body,
@@ -237,6 +413,7 @@ class UpdateModule(BaseAction):
 
     def __post_init__(self) -> None:
         self.module_descriptor = sys.modules.user_modules[str(self.module_file)][0]
+        self.source = self.module_descriptor.source
         self.logger = self.reloader.logger
 
     def disable_pydev_warning(self):
@@ -284,7 +461,11 @@ class UpdateModule(BaseAction):
                 a.execute()
                 a.post_execute()
 
-        sys.modules.user_modules[str(self.module_file)][0] = new_module_descriptor
+        sys.modules.user_modules[str(self.module_file)][0] = ModuleDescriptor(self.reloader,
+                                                                              name=self.module_descriptor.name,
+                                                                              path=self.module_descriptor.path,
+                                                                              body=self.module_descriptor.module_obj.python_obj)
+        sys.modules.user_modules[str(self.module_file)][0].post_execute()
 
     def rollback(self) -> None:
         sys.modules.user_modules[str(self.module_file)][0] = self.module_descriptor
@@ -327,9 +508,6 @@ class Module(ContainerObj):
 
         ret = name in __builtins__.keys() or name == "__builtins__"
         return ret
-
-    def get_dict(self) -> "OrderedDict[str, Any]":
-        return OrderedDict(self.python_obj.__dict__)
 
     @classmethod
     def _is_ignored(cls, name: str) -> bool:

@@ -42,10 +42,10 @@ class TestClasses(utils.TestBase):
 
         carwash.load_from(init)
         car.load_from(init)
-        reloader.assert_objects(carwash, 'sandbox.carwash.Carwash.sprinkler_n: ClassVariable',
+        reloader.assert_objects(carwash, 'sandbox.carwash.math: Import',
                                          'sandbox.carwash.Carwash: Class',
-                                         'sandbox.carwash.math: Import')
-        reloader.assert_objects(init, 'sandbox.car: Import', 'sandbox.carwash: Import')
+                                         'sandbox.carwash.Carwash.sprinkler_n: ClassVariable')
+        reloader.assert_objects(init, 'sandbox.carwash: Import', 'sandbox.car: Import')
 
         assert carwash.device.Carwash.sprinkler_n == 3
         assert car.device.Car.car_sprinklers == 1
@@ -53,10 +53,10 @@ class TestClasses(utils.TestBase):
         carwash.replace("sprinkler_n = 3", "sprinkler_n = 6")
 
         reloader.reload(carwash)
-        reloader.assert_objects(carwash, 'sandbox.carwash.Carwash.sprinkler_n: ClassVariable',
-                                'sandbox.carwash.Carwash: Class',
-                                'sandbox.carwash.math: Import')
-        reloader.assert_objects(init, 'sandbox.car: Import', 'sandbox.carwash: Import')
+        reloader.assert_objects(carwash, 'sandbox.carwash.math: Import',
+                                         'sandbox.carwash.Carwash: Class',
+                                         'sandbox.carwash.Carwash.sprinkler_n: ClassVariable')
+        reloader.assert_objects(init, 'sandbox.carwash: Import', 'sandbox.car: Import')
 
         reloader.assert_actions(
             "Update Module: sandbox.carwash",
@@ -96,13 +96,13 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Carwash.print_sprinklers: Method',
-                                        'module.Carwash.sprinklers_n: ClassVariable',
-                                        'module.Carwash: Class',
-                                        'module.CarwashBase.print_sprinklers: Method',
-                                        'module.CarwashBase.sprinklers_n: ClassVariable',
+        reloader.assert_objects(module, 'module.math: Import',
                                         'module.CarwashBase: Class',
-                                        'module.math: Import')
+                                        'module.CarwashBase.sprinklers_n: ClassVariable',
+                                        'module.CarwashBase.print_sprinklers: Method',
+                                        'module.Carwash: Class',
+                                        'module.Carwash.sprinklers_n: ClassVariable',
+                                        'module.Carwash.print_sprinklers: Method')
 
         print_sprinklers_id = id(module.device.CarwashBase.print_sprinklers)
 
@@ -130,13 +130,13 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.print_sprinklers: Method',
-                                        'module.Carwash.sprinklers_n: ClassVariable',
-                                        'module.Carwash: Class',
-                                        'module.CarwashBase.print_sprinklers: Method',
-                                        'module.CarwashBase.sprinklers_n: ClassVariable',
+        reloader.assert_objects(module, 'module.math: Import',
                                         'module.CarwashBase: Class',
-                                        'module.math: Import')
+                                        'module.CarwashBase.sprinklers_n: ClassVariable',
+                                        'module.CarwashBase.print_sprinklers: Method',
+                                        'module.Carwash: Class',
+                                        'module.Carwash.sprinklers_n: ClassVariable',
+                                        'module.Carwash.print_sprinklers: Method')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -168,9 +168,9 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Carwash: Class',
+        reloader.assert_objects(module, 'module.CarwashBase: Class',
                                         'module.CarwashBase.__init__: Method',
-                                        'module.CarwashBase: Class')
+                                        'module.Carwash: Class')
 
         base_init_id = id(module.device.CarwashBase.__init__)
 
@@ -192,10 +192,10 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.__init__: Method',
-                                        'module.Carwash: Class',
+        reloader.assert_objects(module, 'module.CarwashBase: Class',
                                         'module.CarwashBase.__init__: Method',
-                                        'module.CarwashBase: Class')
+                                        'module.Carwash: Class',
+                                        'module.Carwash.__init__: Method')
         reloader.assert_actions(
             "Update Module: module", "Add Method: module.Carwash.__init__"
         )
@@ -226,10 +226,10 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Carwash.__init__: Method',
-                                         'module.Carwash: Class',
-                                         'module.CarwashBase.__init__: Method',
-                                         'module.CarwashBase: Class')
+        reloader.assert_objects(module, 'module.CarwashBase: Class',
+                                        'module.CarwashBase.__init__: Method',
+                                        'module.Carwash: Class',
+                                        'module.Carwash.__init__: Method')
 
         base_init_id = id(module.device.CarwashBase.__init__)
         init_id = id(module.device.Carwash.__init__)
@@ -253,10 +253,10 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.__init__: Method',
-                                'module.Carwash: Class',
-                                'module.CarwashBase.__init__: Method',
-                                'module.CarwashBase: Class')
+        reloader.assert_objects(module, 'module.CarwashBase: Class',
+                                        'module.CarwashBase.__init__: Method',
+                                        'module.Carwash: Class',
+                                        'module.Carwash.__init__: Method')
         reloader.assert_actions(
             "Update Module: module", "Update Method: module.Carwash.__init__"
         )
@@ -288,10 +288,10 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Carwash.__init__: Method',
-                                        'module.Carwash: Class',
+        reloader.assert_objects(module, 'module.CarwashBase: Class',
                                         'module.CarwashBase.__init__: Method',
-                                        'module.CarwashBase: Class')
+                                        'module.Carwash: Class',
+                                        'module.Carwash.__init__: Method')
 
         module.rewrite(
             """
@@ -309,10 +309,10 @@ class TestClasses(utils.TestBase):
         with raises(FullReloadNeeded):
             reloader.reload(module)
 
-        reloader.assert_objects(module, 'module.Carwash.__init__: Method',
-                                'module.Carwash: Class',
-                                'module.CarwashBase.__init__: Method',
-                                'module.CarwashBase: Class')
+        reloader.assert_objects(module, 'module.CarwashBase: Class',
+                                        'module.CarwashBase.__init__: Method',
+                                        'module.Carwash: Class',
+                                        'module.Carwash.__init__: Method')
 
         module.assert_not_changed()
 
@@ -328,7 +328,7 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Carwash.name_type: ClassVariable', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.name_type: ClassVariable')
 
         def assert_not_reloaded():
             assert module.device.Carwash.name_type is int
@@ -338,7 +338,7 @@ class TestClasses(utils.TestBase):
         module.replace("name_type = int", "name_type = str")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.name_type: ClassVariable', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.name_type: ClassVariable')
         reloader.assert_actions(
             "Update Module: module", "Update ClassVariable: module.Carwash.name_type"
         )
@@ -374,10 +374,10 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.print_sprinklers: Method',
-                                        'module.Carwash.sprinklers_n: ClassVariable',
+        reloader.assert_objects(module, 'module.a: Variable',
                                         'module.Carwash: Class',
-                                        'module.a: Variable')
+                                        'module.Carwash.sprinklers_n: ClassVariable',
+                                        'module.Carwash.print_sprinklers: Method')
         reloader.assert_actions("Update Module: module", "Add Class: module.Carwash")
 
         assert module.device.Carwash.sprinklers_n == 55
@@ -396,14 +396,14 @@ class TestClasses(utils.TestBase):
             class_attr = 2
 
         Carwash.klass = Carwash 
-        """,
+        """
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Carwash.class_attr: ClassVariable', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.class_attr: ClassVariable')
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.class_attr: ClassVariable', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.class_attr: ClassVariable')
         module.assert_not_changed()
 
     def test_recursion_two_deep(self, sandbox):
@@ -419,20 +419,19 @@ class TestClasses(utils.TestBase):
                 class_attr2 = 13
 
         Carwash.Car.klass = Carwash 
-        """,
+        """
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Carwash.Car.class_attr2: ClassVariable',
-                                        'module.Carwash.Car: Class',
+        reloader.assert_objects(module, 'module.Carwash: Class',
                                         'module.Carwash.class_attr: ClassVariable',
-                                        'module.Carwash: Class')
-
+                                        'module.Carwash.Car: Class',
+                                        'module.Carwash.Car.class_attr2: ClassVariable')
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.Car.class_attr2: ClassVariable',
-                                        'module.Carwash.Car: Class',
+        reloader.assert_objects(module, 'module.Carwash: Class',
                                         'module.Carwash.class_attr: ClassVariable',
-                                        'module.Carwash: Class')
+                                        'module.Carwash.Car: Class',
+                                        'module.Carwash.Car.class_attr2: ClassVariable')
         module.assert_not_changed()
 
     def test_added_class_attr(self, sandbox):
@@ -446,14 +445,14 @@ class TestClasses(utils.TestBase):
 
                 def fun(self) -> str:
                     return 12
-            """,
+            """
         )
 
         module.load()
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.fun: Method',
+            reloader.assert_objects(module, 'module.Carwash: Class',
                                             'module.Carwash.sprinklers_n: ClassVariable',
-                                            'module.Carwash: Class')
+                                            'module.Carwash.fun: Method')
             assert hasattr(module.device.Carwash, "sprinklers_n")
             assert not hasattr(module.device.Carwash, "cars_n")
 
@@ -473,13 +472,13 @@ class TestClasses(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_actions('Update Module: module',
-                                 'Add ClassVariable: module.Carwash.cars_n',
-                                 'Move Method: module.Carwash.fun')
+                                'Add ClassVariable: module.Carwash.cars_n',
+                                'Move Method: module.Carwash.fun')
 
-        reloader.assert_objects(module, 'module.Carwash.cars_n: ClassVariable',
-                                        'module.Carwash.fun: Method',
+        reloader.assert_objects(module, 'module.Carwash: Class',
                                         'module.Carwash.sprinklers_n: ClassVariable',
-                                        'module.Carwash: Class')
+                                        'module.Carwash.cars_n: ClassVariable',
+                                        'module.Carwash.fun: Method')
 
         assert hasattr(module.device.Carwash, "sprinklers_n")
         assert hasattr(module.device.Carwash, "cars_n")
@@ -500,15 +499,15 @@ class TestClasses(utils.TestBase):
 
                 def fun(self) -> str:
                     return 12
-            """,
+            """
         )
 
         module.load()
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.cars_n: ClassVariable',
-                                            'module.Carwash.fun: Method',
+            reloader.assert_objects(module, 'module.Carwash: Class',
                                             'module.Carwash.sprinklers_n: ClassVariable',
-                                            'module.Carwash: Class')
+                                            'module.Carwash.cars_n: ClassVariable',
+                                            'module.Carwash.fun: Method')
 
             assert hasattr(module.device.Carwash, "sprinklers_n")
             assert hasattr(module.device.Carwash, "cars_n")
@@ -526,9 +525,9 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.fun: Method',
-                                'module.Carwash.sprinklers_n: ClassVariable',
-                                'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class',
+                                        'module.Carwash.sprinklers_n: ClassVariable',
+                                        'module.Carwash.fun: Method')
 
         reloader.assert_actions('Update Module: module',
                              'Delete ClassVariable: module.Carwash.cars_n',
@@ -561,9 +560,9 @@ class TestClasses(utils.TestBase):
 
         reffered_print_sprinklers_cls = module.device.Carwash.print_sprinklers_cls
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.print_sprinklers: Method',
-                                             'module.Carwash.print_sprinklers_cls: ClassMethod',
-                                             'module.Carwash: Class')
+            reloader.assert_objects(module, 'module.Carwash: Class',
+                                            'module.Carwash.print_sprinklers_cls: ClassMethod',
+                                            'module.Carwash.print_sprinklers: Method')
 
             assert (
                 module.device.Carwash.print_sprinklers_cls()
@@ -589,9 +588,9 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.print_sprinklers: Method',
-                                'module.Carwash.print_sprinklers_cls: ClassMethod',
-                                'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class',
+                                        'module.Carwash.print_sprinklers_cls: ClassMethod',
+                                        'module.Carwash.print_sprinklers: Method')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -626,7 +625,7 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.__repr__: Method', 'module.Carwash: Class')
+            reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.__repr__: Method')
             assert repr(module.device.Carwash()) == "Carwash"
         assert_not_reloaded()
 
@@ -639,7 +638,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.__repr__: Method', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.__repr__: Method')
 
         reloader.assert_actions(
             "Update Module: module", "Update Method: module.Carwash.__repr__"
@@ -686,17 +685,17 @@ class TestClasses(utils.TestBase):
         old_engine_class = module.device.Engine
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Car.__init__: Method',
-                                    'module.Car.engine: ClassVariable',
-                                    'module.Car.engine_class: ClassVariable',
-                                    'module.Car.other_none_var: ClassVariable',
-                                    'module.Car: Class',
-                                    'module.Carwash.__init__: Method',
-                                    'module.Carwash.car_a: ClassVariable',
-                                    'module.Carwash.car_b: ClassVariable',
-                                    'module.Carwash: Class',
-                                    'module.Engine.__init__: Method',
-                                    'module.Engine: Class')
+            reloader.assert_objects(module, 'module.Engine: Class',
+                                            'module.Engine.__init__: Method',
+                                            'module.Car: Class',
+                                            'module.Car.engine: ClassVariable',
+                                            'module.Car.engine_class: ClassVariable',
+                                            'module.Car.other_none_var: ClassVariable',
+                                            'module.Car.__init__: Method',
+                                            'module.Carwash: Class',
+                                            'module.Carwash.car_a: ClassVariable',
+                                            'module.Carwash.car_b: ClassVariable',
+                                            'module.Carwash.__init__: Method')
 
             assert module.device.Engine is old_engine_class
         assert_not_reloaded()
@@ -737,17 +736,17 @@ class TestClasses(utils.TestBase):
             "Update Method: module.Carwash.__init__",
         )
 
-        reloader.assert_objects(module, 'module.Car.__init__: Method',
+        reloader.assert_objects(module, 'module.Engine: Class',
+                                        'module.Engine.__init__: Method',
+                                        'module.Car: Class',
                                         'module.Car.engine: ClassVariable',
                                         'module.Car.engine_class: Reference',
                                         'module.Car.other_none_var: ClassVariable',
-                                        'module.Car: Class',
-                                        'module.Carwash.__init__: Method',
+                                        'module.Car.__init__: Method',
+                                        'module.Carwash: Class',
                                         'module.Carwash.car_a: ClassVariable',
                                         'module.Carwash.car_b: ClassVariable',
-                                        'module.Carwash: Class',
-                                        'module.Engine.__init__: Method',
-                                        'module.Engine: Class')
+                                        'module.Carwash.__init__: Method')
 
         assert module.device.Engine is old_engine_class
         assert isinstance(module.device.Carwash().car_b, module.device.Car)
@@ -780,9 +779,9 @@ class TestClasses(utils.TestBase):
 
         module.load()
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.cars_n: PropertyGetter',
+            reloader.assert_objects(module, 'module.Carwash: Class',
                                             'module.Carwash.sprinklers_n: PropertyGetter',
-                                            'module.Carwash: Class')
+                                            'module.Carwash.cars_n: PropertyGetter')
             assert module.device.Carwash().sprinklers_n == 3
             assert module.device.Carwash().cars_n == 5
 
@@ -802,9 +801,9 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.cars_n: PropertyGetter',
+        reloader.assert_objects(module, 'module.Carwash: Class',
                                         'module.Carwash.sprinklers_n: PropertyGetter',
-                                        'module.Carwash: Class')
+                                        'module.Carwash.cars_n: PropertyGetter')
         reloader.assert_actions('Update Module: module', 'Update PropertyGetter: module.Carwash.sprinklers_n')
 
         assert module.device.Carwash().sprinklers_n == 10
@@ -833,9 +832,9 @@ class TestClasses(utils.TestBase):
 
         module.load()
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.sprinklers_n: PropertyGetter',
-                                            'module.Carwash.sprinklers_n__setter__: PropertySetter',
-                                            'module.Carwash: Class')
+            reloader.assert_objects(module, 'module.Carwash: Class',
+                                            'module.Carwash.sprinklers_n: PropertyGetter',
+                                            'module.Carwash.sprinklers_n__setter__: PropertySetter')
             assert module.device.Carwash().sprinklers_n == 10
         assert_not_reloaded()
 
@@ -843,9 +842,9 @@ class TestClasses(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_objects(module, 'module.Carwash.sprinklers_n: PropertyGetter',
-                                'module.Carwash.sprinklers_n__setter__: PropertySetter',
-                                'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class',
+                                        'module.Carwash.sprinklers_n: PropertyGetter',
+                                        'module.Carwash.sprinklers_n__setter__: PropertySetter')
 
         assert module.device.Carwash().sprinklers_n == 10
 
@@ -880,7 +879,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.print_sprinklers: Method', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.print_sprinklers: Method')
         reloader.assert_actions(
             "Update Module: module", "Add Method: module.Carwash.print_sprinklers"
         )
@@ -909,9 +908,9 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.fun1: Method',
-                                            'module.Carwash.fun2: Method',
-                                            'module.Carwash: Class')
+            reloader.assert_objects(module, 'module.Carwash: Class',
+                                            'module.Carwash.fun1: Method',
+                                            'module.Carwash.fun2: Method')
             assert hasattr(module.device.Carwash, "fun1")
             assert hasattr(module.device.Carwash, "fun2")
 
@@ -927,7 +926,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.fun1: Method', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.fun1: Method')
 
         reloader.assert_actions(
             "Update Module: module", "Delete Method: module.Carwash.fun2"
@@ -957,9 +956,9 @@ class TestClasses(utils.TestBase):
 
         module.load()
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash: Class',
+            reloader.assert_objects(module, 'module.CarwashBase: Class',
                                             'module.CarwashBase.fun: Method',
-                                            'module.CarwashBase: Class')
+                                            'module.Carwash: Class')
             assert module.device.CarwashBase().fun() == 2
             assert module.device.Carwash().fun() == 2
 
@@ -968,9 +967,9 @@ class TestClasses(utils.TestBase):
         module.replace("return 2", "return 10")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash: Class',
+        reloader.assert_objects(module, 'module.CarwashBase: Class',
                                         'module.CarwashBase.fun: Method',
-                                        'module.CarwashBase: Class')
+                                        'module.Carwash: Class')
 
         reloader.assert_actions('Update Module: module', 'Update Method: module.CarwashBase.fun')
 
@@ -996,7 +995,7 @@ class TestClasses(utils.TestBase):
 
         def assert_not_reloaded():
             assert not hasattr(module.device.Carwash, "Meta")
-            reloader.assert_objects(module, 'module.Carwash.name: ClassVariable', 'module.Carwash: Class')
+            reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.name: ClassVariable')
 
         assert_not_reloaded()
 
@@ -1011,10 +1010,10 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.Meta.car_numbers: ClassVariable',
+        reloader.assert_objects(module, 'module.Carwash: Class',
                                         'module.Carwash.Meta: Class',
-                                        'module.Carwash.name: ClassVariable',
-                                        'module.Carwash: Class')
+                                        'module.Carwash.Meta.car_numbers: ClassVariable',
+                                        'module.Carwash.name: ClassVariable')
 
         reloader.assert_actions(
             "Update Module: module", "Add Class: module.Carwash.Meta"
@@ -1045,10 +1044,10 @@ class TestClasses(utils.TestBase):
         carwash_meta_class_id = id(module.device.Carwash.Meta)
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.Meta.car_numbers: ClassVariable',
-                                    'module.Carwash.Meta: Class',
-                                    'module.Carwash.name: ClassVariable',
-                                    'module.Carwash: Class')
+            reloader.assert_objects(module, 'module.Carwash: Class',
+                                            'module.Carwash.Meta: Class',
+                                            'module.Carwash.Meta.car_numbers: ClassVariable',
+                                            'module.Carwash.name: ClassVariable')
 
         def assert_id_not_changed():
             assert id(module.device.Carwash) == carwash_class_id
@@ -1068,10 +1067,10 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.Meta.car_numbers: ClassVariable',
-                                         'module.Carwash.Meta: Class',
-                                         'module.Carwash.name: ClassVariable',
-                                         'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class',
+                                        'module.Carwash.Meta: Class',
+                                        'module.Carwash.Meta.car_numbers: ClassVariable',
+                                        'module.Carwash.name: ClassVariable')
         assert_id_not_changed()
         reloader.assert_actions(
             "Update Module: module",
@@ -1101,10 +1100,10 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Carwash.Meta.car_numbers: ClassVariable',
-                                             'module.Carwash.Meta: Class',
-                                             'module.Carwash.name: ClassVariable',
-                                             'module.Carwash: Class')
+            reloader.assert_objects(module, 'module.Carwash: Class',
+                                            'module.Carwash.Meta: Class',
+                                            'module.Carwash.Meta.car_numbers: ClassVariable',
+                                            'module.Carwash.name: ClassVariable')
             assert hasattr(module.device.Carwash, "Meta")
 
         assert_not_reloaded()
@@ -1117,7 +1116,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Carwash.name: ClassVariable', 'module.Carwash: Class')
+        reloader.assert_objects(module, 'module.Carwash: Class', 'module.Carwash.name: ClassVariable')
 
         reloader.assert_actions(
             "Update Module: module", "Delete Class: module.Carwash.Meta"
@@ -1166,11 +1165,11 @@ class TestClasses(utils.TestBase):
         car.load_from(init)
 
         def assert_not_reloaded():
-            reloader.assert_objects(init, 'sandbox.car: Import', 'sandbox.carwash: Import')
-            reloader.assert_objects(carwash, 'sandbox.carwash.CarNameType.a: ClassVariable',
-                                             'sandbox.carwash.CarNameType: Class',
-                                             'sandbox.carwash.Carwash.name_type: Reference',
-                                             'sandbox.carwash.Carwash: Class')
+            reloader.assert_objects(init, 'sandbox.carwash: Import', 'sandbox.car: Import')
+            reloader.assert_objects(carwash, 'sandbox.carwash.CarNameType: Class',
+                                             'sandbox.carwash.CarNameType.a: ClassVariable',
+                                             'sandbox.carwash.Carwash: Class',
+                                             'sandbox.carwash.Carwash.name_type: Reference')
             reloader.assert_objects(car, 'sandbox.car.Carwash: Foreigner', 'sandbox.car.SuperCarwash: Class')
 
         assert_not_reloaded()
@@ -1188,15 +1187,15 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(car)
-        reloader.assert_objects(init, 'sandbox.car: Import', 'sandbox.carwash: Import')
-        reloader.assert_objects(carwash, 'sandbox.carwash.CarNameType.a: ClassVariable',
-                                         'sandbox.carwash.CarNameType: Class',
-                                         'sandbox.carwash.Carwash.name_type: Reference',
-                                         'sandbox.carwash.Carwash: Class')
+        reloader.assert_objects(init, 'sandbox.carwash: Import', 'sandbox.car: Import')
+        reloader.assert_objects(carwash, 'sandbox.carwash.CarNameType: Class',
+                                         'sandbox.carwash.CarNameType.a: ClassVariable',
+                                         'sandbox.carwash.Carwash: Class',
+                                         'sandbox.carwash.Carwash.name_type: Reference')
         reloader.assert_objects(car, 'sandbox.car.Carwash: Foreigner',
                                      'sandbox.car.NameType: Class',
-                                     'sandbox.car.SuperCarwash.name_type: Reference',
-                                     'sandbox.car.SuperCarwash: Class')
+                                     'sandbox.car.SuperCarwash: Class',
+                                     'sandbox.car.SuperCarwash.name_type: Reference')
 
         reloader.assert_actions(
             "Update Module: sandbox.car",
@@ -1244,12 +1243,12 @@ class TestClasses(utils.TestBase):
         cupcake.load_from(init)
 
         def assert_not_reloaded():
-            reloader.assert_objects(init, 'sandbox.cupcake: Import', 'sandbox.cupcake_base: Import')
-            reloader.assert_objects(cupcake_base, 'sandbox.cupcake_base.CupcakeBase.size: ClassVariable',
-                                                  'sandbox.cupcake_base.CupcakeBase: Class')
-            reloader.assert_objects(cupcake, 'sandbox.cupcake.Cupcake.colour: ClassVariable',
+            reloader.assert_objects(init, 'sandbox.cupcake_base: Import', 'sandbox.cupcake: Import')
+            reloader.assert_objects(cupcake_base, 'sandbox.cupcake_base.CupcakeBase: Class',
+                                                  'sandbox.cupcake_base.CupcakeBase.size: ClassVariable')
+            reloader.assert_objects(cupcake, 'sandbox.cupcake.CupcakeBase: Foreigner',
                                              'sandbox.cupcake.Cupcake: Class',
-                                             'sandbox.cupcake.CupcakeBase: Foreigner')
+                                             'sandbox.cupcake.Cupcake.colour: ClassVariable')
         assert_not_reloaded()
 
         cupcake.device.Cupcake.size = 15
@@ -1275,7 +1274,7 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+            reloader.assert_objects(module, 'module.Cupcake: Class', 'module.Cupcake.eat: Method')
             assert module.device.Cupcake().eat() == 10
 
         assert_not_reloaded()
@@ -1291,7 +1290,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+        reloader.assert_objects(module, 'module.Cupcake: Class', 'module.Cupcake.eat: Method')
         reloader.assert_actions(
             'Update Module: module', 'Update Method: module.Cupcake.eat',
         )
@@ -1314,8 +1313,9 @@ class TestClasses(utils.TestBase):
         )
 
         module.load()
+
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+            reloader.assert_objects(module, 'module.Cupcake: Class', 'module.Cupcake.eat: Method')
 
         module.rewrite(
             """
@@ -1348,7 +1348,7 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+            reloader.assert_objects(module, 'module.Cupcake: Class', 'module.Cupcake.eat: Method')
 
         assert_not_reloaded()
 
@@ -1363,7 +1363,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+        reloader.assert_objects(module, 'module.Cupcake: Class', 'module.Cupcake.eat: Method')
 
         reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
@@ -1390,7 +1390,7 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+            reloader.assert_objects(module, 'module.Cupcake: Class', 'module.Cupcake.eat: Method')
 
         assert_not_reloaded()
 
@@ -1405,7 +1405,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cupcake.eat: Method', 'module.Cupcake: Class')
+        reloader.assert_objects(module, 'module.Cupcake: Class', 'module.Cupcake.eat: Method')
 
         reloader.assert_actions('Update Module: module', 'Update Method: module.Cupcake.eat')
 
@@ -1441,7 +1441,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cake.fun: Method', 'module.Cake: Class')
+        reloader.assert_objects(module, 'module.Cake: Class', 'module.Cake.fun: Method')
 
         reloader.assert_actions('Update Module: module', 'Add Method: module.Cake.fun')
         assert module.device.Cake.fun(5) == 25
@@ -1464,7 +1464,7 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Cake.fun: Method', 'module.Cake: Class')
+            reloader.assert_objects(module, 'module.Cake: Class', 'module.Cake.fun: Method')
 
         assert_not_reloaded()
 
@@ -1476,7 +1476,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cake.fun: Method', 'module.Cake: Class')
+        reloader.assert_objects(module, 'module.Cake: Class', 'module.Cake.fun: Method')
 
         reloader.assert_actions('Update Module: module', 'Update Method: module.Cake.fun')
         assert module.device.Cake.fun(5) == 25
@@ -1515,7 +1515,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cake.eat: StaticMethod', 'module.Cake: Class')
+        reloader.assert_objects(module, 'module.Cake: Class', 'module.Cake.eat: StaticMethod')
 
         reloader.assert_actions('Update Module: module', 'Add StaticMethod: module.Cake.eat')
         assert module.device.Cake.eat() == "Eating"
@@ -1545,7 +1545,7 @@ class TestClasses(utils.TestBase):
 
         def assert_not_reloaded():
             assert_ids()
-            reloader.assert_objects(module, 'module.Cake.eat: StaticMethod', 'module.Cake: Class')
+            reloader.assert_objects(module, 'module.Cake: Class', 'module.Cake.eat: StaticMethod')
 
         assert_not_reloaded()
 
@@ -1559,7 +1559,7 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cake.eat: StaticMethod', 'module.Cake: Class')
+        reloader.assert_objects(module, 'module.Cake: Class', 'module.Cake.eat: StaticMethod')
         assert_ids()
 
         reloader.assert_actions('Update Module: module', 'Update StaticMethod: module.Cake.eat')
@@ -1585,8 +1585,8 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Dict: Foreigner',
-                                            'module.List: Foreigner',
+            reloader.assert_objects(module, 'module.List: Foreigner',
+                                            'module.Dict: Foreigner',
                                             'module.test_type: Reference')
             module.assert_not_changed()
 
@@ -1601,8 +1601,8 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Dict: Foreigner',
-                                        'module.List: Foreigner',
+        reloader.assert_objects(module, 'module.List: Foreigner',
+                                        'module.Dict: Foreigner',
                                         'module.test_type: Reference')
 
         reloader.assert_actions('Update Module: module', 'Update Reference: module.test_type')
@@ -1629,9 +1629,9 @@ class TestClasses(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Cupcake.eat: Method',
-                                            'module.Cupcake.name: ClassMethod',
-                                            'module.Cupcake: Class')
+            reloader.assert_objects(module, 'module.Cupcake: Class',
+                                            'module.Cupcake.eat: Method',
+                                            'module.Cupcake.name: ClassMethod')
             module.assert_not_changed()
 
         assert_not_reloaded()
@@ -1650,9 +1650,9 @@ class TestClasses(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Cupcake.eat: Method',
-                                            'module.Cupcake.name: ClassMethod',
-                                            'module.Cupcake: Class')
+        reloader.assert_objects(module, 'module.Cupcake: Class',
+                                        'module.Cupcake.eat: Method',
+                                        'module.Cupcake.name: ClassMethod')
 
         reloader.assert_actions('Update Module: module',
                                 'Move Method: module.Cupcake.eat',

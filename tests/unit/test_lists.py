@@ -20,7 +20,7 @@ class TestLists(utils.TestBase):
         cakes_id = id(module.device.cakes)
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.cakes.0: Variable', 'module.cakes.1: Variable', 'module.cakes: List')
+            reloader.assert_objects(module, 'module.cakes: List', 'module.cakes.0: Variable', 'module.cakes.1: Variable')
             assert cakes_id == id(module.device.cakes)
 
         assert_not_reloaded()
@@ -32,10 +32,10 @@ class TestLists(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.cakes.0: Variable',
+        reloader.assert_objects(module, 'module.cakes: List',
+                                        'module.cakes.0: Variable',
                                         'module.cakes.1: Variable',
-                                        'module.cakes.2: Variable',
-                                        'module.cakes: List')
+                                        'module.cakes.2: Variable')
 
         reloader.assert_actions('Update Module: module', 'Update List: module.cakes')
 
@@ -61,12 +61,12 @@ class TestLists(utils.TestBase):
         nested_id = id(module.device.sweets[-1])
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.sweets.0: Variable',
+            reloader.assert_objects(module, 'module.sweets: List',
+                                            'module.sweets.0: Variable',
                                             'module.sweets.1: Variable',
-                                            'module.sweets.2.0: Variable',
-                                            'module.sweets.2.1: Variable',
                                             'module.sweets.2: List',
-                                            'module.sweets: List')
+                                            'module.sweets.2.0: Variable',
+                                            'module.sweets.2.1: Variable')
             assert sweets_id == id(module.device.sweets)
             assert nested_id == id(module.device.sweets[-1])
 
@@ -79,13 +79,13 @@ class TestLists(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.sweets.0: Variable',
+        reloader.assert_objects(module, 'module.sweets: List',
+                                        'module.sweets.0: Variable',
                                         'module.sweets.1: Variable',
+                                        'module.sweets.2: List',
                                         'module.sweets.2.0: Variable',
                                         'module.sweets.2.1: Variable',
-                                        'module.sweets.2.2: Variable',
-                                        'module.sweets.2: List',
-                                        'module.sweets: List')
+                                        'module.sweets.2.2: Variable')
 
         reloader.assert_actions('Update Module: module', 'Update List: module.sweets')
 
@@ -124,15 +124,15 @@ class TestLists(utils.TestBase):
 
         def assert_not_reloaded():
             reloader.assert_objects(module, 'module.Cheesecake: Class',
+                                            'module.Cupcake: Class',
                                             'module.ChiffonCake: Class',
                                             'module.Cookie: Class',
-                                            'module.Cupcake: Class',
                                             'module.Macaroon: Class',
+                                            'module.sweets: List',
                                             'module.sweets.0: Reference',
-                                            'module.sweets.1.0: Reference',
-                                            'module.sweets.1.1: Reference',
                                             'module.sweets.1: List',
-                                            'module.sweets: List')
+                                            'module.sweets.1.0: Reference',
+                                            'module.sweets.1.1: Reference')
             assert sweets_id == id(module.device.sweets)
 
         assert_not_reloaded()
@@ -160,17 +160,17 @@ class TestLists(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_objects(module, 'module.Cheesecake: Class',
+                                        'module.Cupcake: Class',
                                         'module.ChiffonCake: Class',
                                         'module.Cookie: Class',
-                                        'module.Cupcake: Class',
                                         'module.Macaroon: Class',
+                                        'module.sweets: List',
                                         'module.sweets.0: Reference',
                                         'module.sweets.1: Reference',
+                                        'module.sweets.2: List',
                                         'module.sweets.2.0: Reference',
                                         'module.sweets.2.1: Reference',
-                                        'module.sweets.2.2: Reference',
-                                        'module.sweets.2: List',
-                                        'module.sweets: List')
+                                        'module.sweets.2.2: Reference')
         reloader.assert_actions('Update Module: module', 'Update List: module.sweets')
 
         assert module.device.sweets == [module.device.Cheesecake, module.device.ChiffonCake,
@@ -200,11 +200,11 @@ class TestLists(utils.TestBase):
         cakes_id = id(module.device.cakes)
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.CakeShop.cakes_to_make: Reference',
-                                            'module.CakeShop: Class',
+            reloader.assert_objects(module, 'module.cakes: Tuple',
                                             'module.cakes.0: Variable',
                                             'module.cakes.1: Variable',
-                                            'module.cakes: Tuple')
+                                            'module.CakeShop: Class',
+                                            'module.CakeShop.cakes_to_make: Reference')
             assert cakes_id == id(module.device.cakes)
 
         assert_not_reloaded()
@@ -219,12 +219,12 @@ class TestLists(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.CakeShop.cakes_to_make: Reference',
-                                        'module.CakeShop: Class',
+        reloader.assert_objects(module, 'module.cakes: Tuple',
                                         'module.cakes.0: Variable',
                                         'module.cakes.1: Variable',
                                         'module.cakes.2: Variable',
-                                        'module.cakes: Tuple')
+                                        'module.CakeShop: Class',
+                                        'module.CakeShop.cakes_to_make: Reference')
 
         reloader.assert_actions('Update Module: module',
                                  'DeepUpdate Tuple: module.cakes',
