@@ -35,9 +35,11 @@ class SmartReloader:
         import sys
         from pathlib import Path
         import builtins
+        from threading import Thread
         
         from smartreloader import dependency_watcher
         from smartreloader.misc import import_from_file
+        from smartreloader import e2e
         
         sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
         
@@ -55,13 +57,19 @@ class SmartReloader:
         builtins.reloader = reloader
         
         if __name__ == "__main__":
+            if e2e.enabled:
+                e2e.start()
+                
             reloader.start()
             
-            loader = dependency_watcher.MyLoader("__main__", "{str(entry_point_file)}")
+            loader = dependency_watcher.SmartReloaderLoader("__main__", "{str(entry_point_file)}")
             spec = importlib.util.spec_from_loader("__main__", loader)
             module = importlib.util.module_from_spec(spec)
             {set_module}
-            loader.exec_module(module)
+            try:
+                loader.exec_module(module)
+            except KeyboardInterrupt:
+                pass
         """
         self.seed_file.write_text(dedent(source))
 
@@ -90,7 +98,7 @@ class SmartReloader:
 
         Thread(target=target).start()
 
-    def main(self):
+    def init(self):
         argv = sys.argv[1:]
 
         to_remove = ["python", "python3", "-m"]
@@ -99,7 +107,11 @@ class SmartReloader:
             if r in argv:
                 argv.remove(r)
 
+        is_binary = False
         entry_point_file = self.get_path_from_binary(argv[0])
+
+        if entry_point_file:
+            is_binary = True
 
         if not entry_point_file:
             module_name = argv[0]
@@ -108,44 +120,57 @@ class SmartReloader:
         if not entry_point_file:
             entry_point_file = Path(argv[0])
 
+        entry_point_file = entry_point_file.absolute()
+
         self.create_seed(
             root=Path(os.getcwd()),
             entry_point_file=entry_point_file,
             argv=argv,
-            is_binary=True,
+            is_binary=is_binary,
         )
 
-        if not e2e.enabled:
-            self.remove_seed()
+    def main_loop(self) -> int:
+        while True:
+            proc = subprocess.Popen(["python", str(self.seed_file.name)])
 
-        proc = subprocess.Popen(["python", str(self.seed_file.name)])
+            def signal_handler(sig, frame):
+                proc.send_signal(sig)
 
-        def signal_handler(sig, frame):
-            proc.send_signal(sig)
+            signals_to_propagte = [signal.SIGHUP,
+                                    signal.SIGQUIT,
+                                    signal.SIGILL,
+                                    signal.SIGTRAP,
+                                    signal.SIGABRT,
+                                    signal.SIGBUS,
+                                    signal.SIGFPE,
+                                    signal.SIGUSR1,
+                                    signal.SIGSEGV,
+                                    signal.SIGUSR2,
+                                    signal.SIGPIPE,
+                                    signal.SIGALRM,
+                                    signal.SIGTERM]
+            for s in signals_to_propagte:
+                signal.signal(s, signal_handler)
 
-        signals_to_propagte = [signal.SIGHUP,
-                                signal.SIGINT,
-                                signal.SIGQUIT,
-                                signal.SIGILL,
-                                signal.SIGTRAP,
-                                signal.SIGABRT,
-                                signal.SIGBUS,
-                                signal.SIGFPE,
-                                signal.SIGUSR1,
-                                signal.SIGSEGV,
-                                signal.SIGUSR2,
-                                signal.SIGPIPE,
-                                signal.SIGALRM,
-                                signal.SIGTERM]
-        for s in signals_to_propagte:
-            signal.signal(s, signal_handler)
+            try:
+                proc.communicate()
+            except KeyboardInterrupt:
+                pass
 
-        proc.communicate()
+            if proc.returncode != 3:
+                return proc.returncode
 
 
 def _main() -> None:
-    while True:
-        SmartReloader().main()
+    reloader = SmartReloader()
+    reloader.init()
+
+    exit_code = reloader.main_loop()
+
+    if not e2e.enabled:
+        reloader.remove_seed()
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

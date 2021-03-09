@@ -111,7 +111,6 @@ class Module:
 @dataclass
 class Config:
     plugins: List[str] = field(default_factory=list)
-    e2e: bool = False
 
     filename = Path("smartreloader_config.py")
 
@@ -124,25 +123,20 @@ class Config:
         code = f"""
         from types import ModuleType
         from typing import List
-        import stickybeak
 
         from smartreloader import BaseConfig, smart_django, smart_pandas
         from smartreloader import e2e
 
         class Config(BaseConfig):
             def __init__(self):
-                self.e2e_enabled = {self.e2e}
                 self.stickybeak = None
-                if self.e2e_enabled:
-                    self.stickybeak = stickybeak.Server(e2e.project_root, e2e.STICKYBEAK_PORT)
         
             def plugins(self) -> List[ModuleType]:
                 base_plugins = super().plugins()
                 return [{plugins_str}]
                 
             def on_start(self, argv: List[str]) -> None:
-                if self.e2e_enabled:
-                    self.stickybeak.start()
+                pass
                     
         """
         self.filename.touch()

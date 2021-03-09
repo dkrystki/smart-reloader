@@ -1,5 +1,6 @@
 import os
 import re
+import signal
 import subprocess
 from pathlib import Path
 from subprocess import Popen
@@ -103,12 +104,31 @@ class SmartReloader:
             return applied_actions
 
         @classmethod
+        def assert_applied_actions(cls, *actions, timeout=2) -> None:
+            from time import sleep
+
+            passed_time = 0.0
+            sleep_time = 0.01
+            while True:
+                sleep(sleep_time)
+                passed_time += sleep_time
+
+                applied_actions = tuple(str(a) for a in reloader.partial_reloader.applied_actions)
+                if actions == applied_actions:
+                    break
+
+                if passed_time >= timeout:
+                    raise AssertionError(f"{actions} != {applied_actions}")
+
+                sleep(0.2)
+
+        @classmethod
         def resume(cls) -> List[str]:
             from smartreloader.e2e import Debugger
             Debugger.resume()
 
         @classmethod
-        def wait_unit_paused(cls) -> List[str]:
+        def wait_until_paused(cls) -> List[str]:
             from smartreloader.e2e import Debugger
             Debugger.wait_until_paused()
 
@@ -135,6 +155,7 @@ class SmartReloader:
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
             env=environ,
+            preexec_fn=os.setsid
         )
 
         self.output_collector.start()
@@ -151,14 +172,13 @@ class SmartReloader:
         if self.process.poll() is not None:
             return
 
-        self.send("\x04", expect=False)
+        os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
 
     def remote(self) -> Type["SmartReloader.Remote"]:
         return SmartReloader.Remote
 
     def on_exit(self) -> None:
         self.exit()
-        self.process.kill()
 
     def send(self, text: str, expect=True) -> None:
         if expect:

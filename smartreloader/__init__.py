@@ -1,10 +1,6 @@
 # flake8: noqa E402, F401
-import os
-
 from rich.console import Console
 from rich.traceback import install
-
-from . import e2e
 
 install()
 

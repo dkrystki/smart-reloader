@@ -26,7 +26,8 @@ e = 123131361123
 e = 123131361123
 
 
-GLOBAL_VAR = "test123111131133344see"
+GLOBAL_VAR = "hihi23"
+test = "fsfsd"
 
 
 def hihi(haha):
@@ -153,4 +154,5 @@ class AddressesViewset(
 ):
     queryset = models.Address.objects.all()
     serializer_class = serializers.AddressSerializer
+
 

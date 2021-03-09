@@ -24,7 +24,7 @@ from importlib.machinery import SourceFileLoader
 post_module_exec_hook: Optional[Callable] = None
 
 
-class MyLoader(SourceFileLoader):
+class SmartReloaderLoader(SourceFileLoader):
     def exec_module(self, module: types.ModuleType) -> None:
         init_import(module)
         super().exec_module(module)
@@ -50,7 +50,7 @@ def enable():
         finder = hook(path)
         if "site-packages" in path or "python3" in path:
             return finder
-        finder._loaders.insert(0, (".py", MyLoader))
+        finder._loaders.insert(0, (".py", SmartReloaderLoader))
         return finder
 
     sys.path_hooks[hook_index] = new_hook

@@ -88,13 +88,11 @@ class Stack:
             for f in iterate_frames(frame):
                 frame_module_filename = f.f_code.co_filename
 
-                if str(self.module_file) == frame_module_filename:
-                    module = self.module
-                else:
-                    module = None
+                if str(self.module_file) != frame_module_filename:
+                    continue
 
                 frame = Frame(python_obj=f,
-                              module=module,
+                              module=self.module,
                               reloader=self.reloader)
                 self.frames.append(frame)
 

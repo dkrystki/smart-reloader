@@ -1,6 +1,7 @@
 import errno
 import logging
 import os
+import signal
 import sys
 from logging import getLogger
 from pathlib import Path
@@ -37,8 +38,15 @@ class Reloader(FileSystemEventHandler):
         self.observer.schedule(self, str(self.root), recursive=True)
         watchdog.observers.inotify_buffer.logger.setLevel("INFO")
 
+        signal.signal(signal.SIGUSR1, self._execute_full_reload)
+
+    def _execute_full_reload(*args, **kwargs):
+        sys.exit(3)
+
     def trigger_full_reload(self) -> None:
-        os._exit(0)
+        self.stop()
+        logger.info("Triggering full reload...")
+        os.kill(os.getpid(), signal.SIGUSR1)
 
     def matches(self, path: Path) -> bool:
         return not glob_match(str(path), self.config.ignored_paths) and glob_match(
