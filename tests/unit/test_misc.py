@@ -104,3 +104,67 @@ class TestMisc(utils.TestBase):
         assert sys.modules["sandbox.cupcake"].cupcakes_n == 150
         assert sys.modules["cupcake"].cupcakes_n == 150
         assert sys.modules["sandbox.cupcake"] is not sys.modules["cupcake"]
+
+    def test_new_file(self, sandbox, capsys):
+        reloader = MockedPartialReloader(sandbox.parent)
+
+        init = Module(
+            "__init__.py",
+            """
+        from . import cupcake
+        import cupcake    
+        """,
+        )
+
+        cupcake = Module(
+            "cupcake.py",
+            """
+        cupcakes_n = 100
+        """,
+        )
+
+        init.load()
+
+        cupcake.rewrite("cupcakes_n = 150")
+        reloader.reload(cupcake)
+        reloader.assert_actions('Update Module: sandbox.cupcake',
+                                'Update Variable: sandbox.cupcake.cupcakes_n',
+                                'Update Module: cupcake',
+                                'Update Variable: cupcake.cupcakes_n',
+                                'Update Module: cupcake')
+
+        assert sys.modules["sandbox.cupcake"].cupcakes_n == 150
+        assert sys.modules["cupcake"].cupcakes_n == 150
+        assert sys.modules["sandbox.cupcake"] is not sys.modules["cupcake"]
+
+    def test_delete_file(self, sandbox, capsys):
+        reloader = MockedPartialReloader(sandbox.parent)
+
+        init = Module(
+            "__init__.py",
+            """
+        from . import cupcake
+        import cupcake    
+        """,
+        )
+
+        cupcake = Module(
+            "cupcake.py",
+            """
+        cupcakes_n = 100
+        """,
+        )
+
+        init.load()
+
+        cupcake.rewrite("cupcakes_n = 150")
+        reloader.reload(cupcake)
+        reloader.assert_actions('Update Module: sandbox.cupcake',
+                                'Update Variable: sandbox.cupcake.cupcakes_n',
+                                'Update Module: cupcake',
+                                'Update Variable: cupcake.cupcakes_n',
+                                'Update Module: cupcake')
+
+        assert sys.modules["sandbox.cupcake"].cupcakes_n == 150
+        assert sys.modules["cupcake"].cupcakes_n == 150
+        assert sys.modules["sandbox.cupcake"] is not sys.modules["cupcake"]

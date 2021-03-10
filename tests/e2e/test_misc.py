@@ -92,3 +92,32 @@ class TestClasses(utils.TestBase):
 
         smartreloader.exit()
 
+    @flaky(max_runs=3, min_passes=1)
+    def test_multiple_files_at_once(self, sandbox, smartreloader):
+        config = Config()
+
+        carwash = Module(
+            "cakeshop.py",
+            r"""
+        from smartreloader import e2e
+
+        if __name__ == "__main__":
+            print(f"Starting...")
+            e2e.Debugger.pause()
+        """,
+        )
+
+        e = smartreloader.start("python cakeshop.py")
+        e.output(r"Starting...").eval()
+
+        smartreloader.remote().wait_until_paused()
+        carwash.replace('class SuperType(int):', 'class SuperType(str):')
+
+        e.output(r"\nStarting...").eval()
+
+        carwash.replace('class SuperType(str):', 'class SuperType(float):')
+
+        e.output(r"\nStarting...").eval()
+
+        smartreloader.exit()
+
