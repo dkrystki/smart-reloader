@@ -18,9 +18,23 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
+
+        def assert_not_reloaded():
+            module.assert_not_changed()
+            reloader.assert_objects(module, 'module.car_data: Dictionary',
+                                            'module.car_data.engine_power: DictionaryItem',
+                                            'module.car_data.max_speed: DictionaryItem',
+                                            'module.car_data.seats: DictionaryItem')
+        assert_not_reloaded()
+
         module.replace('"engine_power": 200', '"engine_power": 250')
 
         reloader.reload(module)
+
+        reloader.assert_objects(module, 'module.car_data: Dictionary',
+                                'module.car_data.engine_power: DictionaryItem',
+                                'module.car_data.max_speed: DictionaryItem',
+                                'module.car_data.seats: DictionaryItem')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -28,7 +42,6 @@ class TestDictionaries(utils.TestBase):
         )
 
         reloader.rollback()
-        module.assert_not_changed()
 
     def test_change_key(self, sandbox):
         reloader = MockedPartialReloader(sandbox)
@@ -45,9 +58,21 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
+
+        def assert_not_reloaded():
+            module.assert_not_changed()
+            reloader.assert_objects(module, 'module.car_data: Dictionary',
+                                            'module.car_data.max_speed: DictionaryItem',
+                                            'module.car_data.seats: DictionaryItem',
+                                            'module.car_data.engine_power: DictionaryItem')
+
         module.replace("engine_power", "engine_force")
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.car_data: Dictionary',
+                                        'module.car_data.max_speed: DictionaryItem',
+                                        'module.car_data.seats: DictionaryItem',
+                                        'module.car_data.engine_force: DictionaryItem')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -59,7 +84,7 @@ class TestDictionaries(utils.TestBase):
         assert module.device.car_data["engine_force"] == 200
 
         reloader.rollback()
-        module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_change_key_and_value(self, sandbox):
         reloader = MockedPartialReloader(sandbox)
@@ -76,9 +101,23 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
+
+        def assert_not_reloaded():
+            module.assert_not_changed()
+            reloader.assert_objects(module, 'module.car_data: Dictionary',
+                                    'module.car_data.max_speed: DictionaryItem',
+                                    'module.car_data.seats: DictionaryItem',
+                                    'module.car_data.engine_power: DictionaryItem')
+        assert_not_reloaded()
+
         module.replace('"engine_power": 200', '"engine_force": 250')
 
         reloader.reload(module)
+
+        reloader.assert_objects(module, 'module.car_data: Dictionary',
+                                        'module.car_data.max_speed: DictionaryItem',
+                                        'module.car_data.seats: DictionaryItem',
+                                        'module.car_data.engine_force: DictionaryItem')
 
         reloader.assert_actions(
             "Update Module: module",
@@ -90,7 +129,7 @@ class TestDictionaries(utils.TestBase):
         assert module.device.car_data["engine_force"] == 250
 
         reloader.rollback()
-        module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_add(self, sandbox):
         reloader = MockedPartialReloader(sandbox)
@@ -103,6 +142,12 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
+
+        def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.some_var: Variable')
+            module.assert_not_changed()
+        assert_not_reloaded()
+
         module.rewrite(
             """
             some_var = 1
@@ -120,10 +165,16 @@ class TestDictionaries(utils.TestBase):
             "Update Module: module", "Add Dictionary: module.car_data"
         )
 
+        reloader.assert_objects(module, 'module.some_var: Variable',
+                                        'module.car_data: Dictionary',
+                                        'module.car_data.engine_power: DictionaryItem',
+                                        'module.car_data.max_speed: DictionaryItem',
+                                        'module.car_data.seats: DictionaryItem')
+
         module.assert_obj_in("car_data")
 
         reloader.rollback()
-        module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_delete(self, sandbox):
         reloader = MockedPartialReloader(sandbox)
@@ -142,6 +193,16 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
+
+        def assert_not_reloaded():
+            module.assert_not_changed()
+            reloader.assert_objects(module, 'module.some_var: Variable',
+                                            'module.car_data: Dictionary',
+                                            'module.car_data.engine_power: DictionaryItem',
+                                            'module.car_data.max_speed: DictionaryItem',
+                                            'module.car_data.seats: DictionaryItem')
+        assert_not_reloaded()
+
         module.rewrite(
             """
         some_var = 1
@@ -149,13 +210,15 @@ class TestDictionaries(utils.TestBase):
         )
 
         reloader.reload(module)
+
+        reloader.assert_objects(module, 'module.some_var: Variable')
         reloader.assert_actions(
             "Update Module: module", "Delete Dictionary: module.car_data"
         )
 
         module.assert_obj_not_in("car_data")
         reloader.rollback()
-        module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_rename(self, sandbox):
         reloader = MockedPartialReloader(sandbox)
@@ -174,9 +237,25 @@ class TestDictionaries(utils.TestBase):
         )
 
         module.load()
+
+        def assert_not_reloaded():
+            module.assert_not_changed()
+            reloader.assert_objects(module, 'module.some_var: Variable',
+                                    'module.car_data: Dictionary',
+                                    'module.car_data.engine_power: DictionaryItem',
+                                    'module.car_data.max_speed: DictionaryItem',
+                                    'module.car_data.seats: DictionaryItem')
+
+        assert_not_reloaded()
+
         module.replace("car_data", "car_specs")
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.some_var: Variable',
+                                        'module.car_specs: Dictionary',
+                                        'module.car_specs.engine_power: DictionaryItem',
+                                        'module.car_specs.max_speed: DictionaryItem',
+                                        'module.car_specs.seats: DictionaryItem')
         reloader.assert_actions(
             "Update Module: module",
             "Add Dictionary: module.car_specs",
@@ -187,7 +266,7 @@ class TestDictionaries(utils.TestBase):
         module.assert_obj_not_in("car_data")
 
         reloader.rollback()
-        module.assert_not_changed()
+        assert_not_reloaded()
 
     def test_nested(self, sandbox):
         reloader = MockedPartialReloader(sandbox)
@@ -209,6 +288,12 @@ class TestDictionaries(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
+            reloader.assert_objects(module, 'module.cake_shop: Dictionary',
+                                    'module.cake_shop.cakes: DictionaryItem',
+                                    'module.cake_shop.cupcakes: DictionaryItem',
+                                    'module.cake_shop.clients: Dictionary',
+                                    'module.cake_shop.clients.number: DictionaryItem',
+                                    'module.cake_shop.clients.growth_per_month: DictionaryItem')
             assert module.device.cake_shop["clients"]["number"] == 100
 
         assert_not_reloaded()
@@ -216,6 +301,13 @@ class TestDictionaries(utils.TestBase):
         module.replace('"number": 100', '"number": 150')
 
         reloader.reload(module)
+        reloader.assert_objects(module, 'module.cake_shop: Dictionary',
+                                'module.cake_shop.cakes: DictionaryItem',
+                                'module.cake_shop.cupcakes: DictionaryItem',
+                                'module.cake_shop.clients: Dictionary',
+                                'module.cake_shop.clients.number: DictionaryItem',
+                                'module.cake_shop.clients.growth_per_month: DictionaryItem')
+
         reloader.assert_actions('Update Module: module',
                                 'Update DictionaryItem: module.cake_shop.clients.number')
 
@@ -299,20 +391,15 @@ class TestDictionaries(utils.TestBase):
 
         module.load()
 
-        # def assert_not_reloaded():
-        #     assert module.device.cake_shop["clients"] is None
-
-        # assert_not_reloaded()
-
-        reloader.assert_objects(module,
-                                'module.create_dict: Function',
-                                'module.cake_shop: Dictionary',
-                                'module.cake_shop.cakes: DictionaryItem',
-                                'module.cake_shop.cupcakes: DictionaryItem',
-                                'module.cake_shop.clients: DictionaryItem',
-                                'module.cake_shop.meta: Dictionary',
-                                'module.cake_shop.meta.shop_size_x: DictionaryItem',
-                                'module.cake_shop.meta.shop_size_y: DictionaryItem')
+        assert module.device.cake_shop["clients"] is None
+        reloader.assert_objects(module, 'module.create_dict: Function',
+                                        'module.cake_shop: Dictionary',
+                                        'module.cake_shop.cakes: DictionaryItem',
+                                        'module.cake_shop.cupcakes: DictionaryItem',
+                                        'module.cake_shop.clients: DictionaryItem',
+                                        'module.cake_shop.meta: Dictionary',
+                                        'module.cake_shop.meta.shop_size_x: DictionaryItem',
+                                        'module.cake_shop.meta.shop_size_y: DictionaryItem')
 
         module.rewrite("""
         def create_dict():
@@ -366,5 +453,4 @@ class TestDictionaries(utils.TestBase):
         }
 
         reloader.rollback()
-        # assert_not_reloaded()
         module.assert_not_changed()

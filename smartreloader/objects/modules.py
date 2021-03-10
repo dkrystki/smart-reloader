@@ -173,7 +173,6 @@ class Source:
     class Call(Node):
         types = [ast.Call]
 
-
     @dataclass
     class FunctionDef(Node):
         types = [ast.FunctionDef]
@@ -226,7 +225,7 @@ class Source:
             if isinstance(target_obj, Source.TupleType) and isinstance(value_obj, Source.TupleType):
                 zipped = zip(target_obj.body, value_obj.body)
             elif isinstance(target_obj, Source.TupleType):
-                zipped = zip(target_obj.body, [value_obj.content]*len(target_obj.body))
+                zipped = zip(target_obj.body, [value_obj.content] * len(target_obj.body))
             else:
                 zipped = [(target_obj.content, value_obj.content)]
 
@@ -353,7 +352,7 @@ class Modules(dict):
     user_modules: DefaultDict[str, List[ModuleDescriptor]]
 
     def __init__(
-        self, reloader: "PartialReloader", old_dict: Dict[str, ModuleType]
+            self, reloader: "PartialReloader", old_dict: Dict[str, ModuleType]
     ) -> None:
         super().__init__()
         self.reloader = reloader
@@ -369,10 +368,10 @@ class Modules(dict):
             return
 
         file = Path(value.__file__)
-        module = ModuleDescriptor(name = key,
-                              path=file,
-                              body=value,
-                                reloader=self.reloader)
+        module = ModuleDescriptor(name=key,
+                                  path=file,
+                                  body=value,
+                                  reloader=self.reloader)
         self.user_modules[value.__file__].append(module)
 
     def __getitem__(self, key: str):
@@ -405,16 +404,38 @@ class Modules(dict):
 
 @dataclass(repr=False)
 class UpdateModule(BaseAction):
-    module_file: Path
     priority = 50
-    module_descriptor: "ModuleDescriptor" = field(init=False)
+    user_modules: List[ModuleDescriptor]
+    module_n: int
 
     logger: Logger = field(init=False)
+    _module_descriptor_for_rollback: ModuleDescriptor = field(init=False)
 
     def __post_init__(self) -> None:
-        self.module_descriptor = sys.modules.user_modules[str(self.module_file)][0]
-        self.source = self.module_descriptor.source
+        self._module_descriptor_for_rollback = self.module_descriptor
         self.logger = self.reloader.logger
+
+    @classmethod
+    def factory(cls, reloader: "PartialReloader", module_file: Path, dry_run: bool = False) -> List["UpdateModule"]:
+        ret = []
+        user_modules = sys.modules.user_modules.get(str(module_file), [])
+
+        for i, um in enumerate(user_modules):
+            action = UpdateModule(reloader=reloader,
+                                  user_modules=user_modules,
+                                  module_n=i)
+            ret.append(action)
+
+        return ret
+
+    @property
+    def module_descriptor(self) -> ModuleDescriptor:
+        ret = self.user_modules[self.module_n]
+        return ret
+
+    def set_modules_descriptor(self, module_descriptor: ModuleDescriptor) -> None:
+        self.module_descriptor_for_rollback = module_descriptor
+        self.user_modules[self.module_n] = module_descriptor
 
     def disable_pydev_warning(self):
         try:
@@ -461,14 +482,14 @@ class UpdateModule(BaseAction):
                 a.execute()
                 a.post_execute()
 
-        sys.modules.user_modules[str(self.module_file)][0] = ModuleDescriptor(self.reloader,
-                                                                              name=self.module_descriptor.name,
-                                                                              path=self.module_descriptor.path,
-                                                                              body=self.module_descriptor.module_obj.python_obj)
-        sys.modules.user_modules[str(self.module_file)][0].post_execute()
+        self.set_modules_descriptor(ModuleDescriptor(self.reloader,
+                                                     name=self.module_descriptor.name,
+                                                     path=self.module_descriptor.path,
+                                                     body=self.module_descriptor.module_obj.python_obj))
+        self.module_descriptor.post_execute()
 
     def rollback(self) -> None:
-        sys.modules.user_modules[str(self.module_file)][0] = self.module_descriptor
+        self.set_modules_descriptor(self._module_descriptor_for_rollback)
 
     def __repr__(self) -> str:
         return f"Update Module: {self.module_descriptor.name}"

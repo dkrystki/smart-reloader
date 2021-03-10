@@ -166,13 +166,14 @@ class PartialReloader:
         self.reset()
         self._collect_all_dependencies()
 
-        update_module = UpdateModule(reloader=self,
-                                     module_file=module_file)
-        update_module.pre_execute()
-        update_module.execute(dry_run)
+        actions = UpdateModule.factory(reloader=self, module_file=module_file, dry_run=dry_run)
 
-        stack = Stack(logger=self.logger, module_file=module_file, reloader=self)
-        stack.update()
+        for a in actions:
+            a.pre_execute()
+            a.execute(dry_run)
+
+        # stack = Stack(logger=self.logger, module_file=module_file, reloader=self)
+        # stack.update()
 
     def rollback(self) -> None:
         for a in reversed(self.applied_actions):

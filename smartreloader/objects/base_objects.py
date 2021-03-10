@@ -390,7 +390,10 @@ class Object(ABC):
 
         for m_descr in module_descrs:
             from smartreloader.objects.modules import UpdateModule
-            ret.append(UpdateModule(reloader=self.reloader, module_file=m_descr.path))
+
+            actions = UpdateModule.factory(reloader=self.reloader, module_file=m_descr.path)
+
+            ret.extend(actions)
 
         return ret
 
@@ -433,7 +436,7 @@ class Object(ABC):
 
             for m in modules:
                 from smartreloader.objects.modules import UpdateModule
-                ret.append(UpdateModule(reloader=self.reloader, module_file=m.path))
+                ret.extend(UpdateModule.factory(reloader=self.reloader, module_file=m.path))
 
         return ret
 

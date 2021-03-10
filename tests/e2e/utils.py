@@ -104,6 +104,10 @@ class SmartReloader:
             return applied_actions
 
         @classmethod
+        def reset(cls) -> None:
+            reloader.partial_reloader.reset()
+
+        @classmethod
         def assert_applied_actions(cls, *actions, timeout=2) -> None:
             from time import sleep
 

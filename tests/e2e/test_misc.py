@@ -3,7 +3,7 @@ import stat
 from time import sleep
 
 from pytest import mark
-
+from flaky import flaky
 from tests import utils
 from tests.utils import Module, Config
 
@@ -12,9 +12,9 @@ from tests.utils import Module, Config
 class TestClasses(utils.TestBase):
     @mark.parametrize(
         "command",
-
         ["python carwash.py", "python -m carwash", "./carwash.py", "carwash.py"],
     )
+    @flaky(max_runs=3, min_passes=1)
     def test_basic(self, sandbox, smartreloader, command):
         config = Config()
 
@@ -52,16 +52,16 @@ class TestClasses(utils.TestBase):
         e.output(r"\nCleaning green car").eval()
 
         smartreloader.remote().wait_until_paused()
-        sleep(2)
+        smartreloader.remote().reset()
         carwash.replace('car_colour = "green"', 'car_colour = "blue"')
         smartreloader.remote().assert_applied_actions(f'Update Module: {module_name}',
                                                       f'Update Variable: {module_name}.car_colour')
-        sleep(2)
         smartreloader.remote().resume()
         e.output(r"\nCleaning blue car").eval()
 
         smartreloader.exit()
 
+    @flaky(max_runs=3, min_passes=1)
     def test_full_reload(self, sandbox, smartreloader):
         config = Config()
 
@@ -91,3 +91,4 @@ class TestClasses(utils.TestBase):
         e.output(r"\nStarting...").eval()
 
         smartreloader.exit()
+
