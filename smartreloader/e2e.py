@@ -1,11 +1,11 @@
+import signal
 import os
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 __all__ = []
 
-STICKYBEAK_PORT = 5175
+STICKYBEAK_PORT = 5243
 
 enabled = "SMART_RELOADER_E2E_TEST" in os.environ
 
@@ -43,3 +43,4 @@ def start():
 
     server = stickybeak.Server(project_root, STICKYBEAK_PORT)
     server.start()
+

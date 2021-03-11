@@ -30,6 +30,9 @@ GLOBAL_VAR = "hihi23"
 test = "fsfsd"
 
 
+class TestClass(int):
+    pass
+
 def hihi(haha):
     print(haha)
 

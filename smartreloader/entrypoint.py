@@ -139,6 +139,7 @@ class SmartReloader:
             signals_to_propagte = [signal.SIGHUP,
                                     signal.SIGQUIT,
                                     signal.SIGILL,
+                                    signal.SIGINT,
                                     signal.SIGTRAP,
                                     signal.SIGABRT,
                                     signal.SIGBUS,

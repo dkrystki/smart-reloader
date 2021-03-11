@@ -6,7 +6,7 @@ from pathlib import Path
 from subprocess import Popen
 from threading import Thread
 from time import sleep
-from typing import Callable, List, Optional, Type
+from typing import Callable, List, Optional, Type, NewType
 
 import pyte
 from rhei import Stopwatch
@@ -14,8 +14,9 @@ from stickybeak import Injector
 
 from smartreloader.e2e import STICKYBEAK_PORT
 
-TIMEOUT = 3
+TIMEOUT = 4
 
+Signal = NewType("Signal", int)
 
 injector = Injector(address=f"http://localhost:{STICKYBEAK_PORT}", download_deps=False)
 
@@ -127,12 +128,24 @@ class SmartReloader:
                 sleep(0.2)
 
         @classmethod
-        def resume(cls) -> List[str]:
+        def resume(cls) -> None:
             from smartreloader.e2e import Debugger
             Debugger.resume()
 
         @classmethod
-        def wait_until_paused(cls) -> List[str]:
+        def kill_stickybeak(cls) -> None:
+            from smartreloader import e2e
+            from threading import Thread
+            from time import sleep
+
+            def thread():
+                sleep(0.5)
+                e2e.server.exit()
+
+            Thread(target=thread).start()
+
+        @classmethod
+        def wait_until_paused(cls) -> None:
             from smartreloader.e2e import Debugger
             Debugger.wait_until_paused()
 
@@ -159,7 +172,7 @@ class SmartReloader:
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
             env=environ,
-            preexec_fn=os.setsid
+            preexec_fn=os.setsid,
         )
 
         self.output_collector.start()
@@ -176,6 +189,9 @@ class SmartReloader:
         if self.process.poll() is not None:
             return
 
+        self.force_kill()
+
+    def force_kill(self):
         os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
 
     def remote(self) -> Type["SmartReloader.Remote"]:
@@ -189,6 +205,9 @@ class SmartReloader:
             self.expecter.raw(text)
         self.process.stdin.write(text.encode("utf-8"))
         self.process.stdin.flush()
+
+    def send_signal(self, sig: Signal) -> None:
+        self.process.send_signal(sig)
 
     def sendline(self, line: str, expect=True) -> None:
         if expect:

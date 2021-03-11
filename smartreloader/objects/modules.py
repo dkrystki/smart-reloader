@@ -217,7 +217,7 @@ class Source:
             return self.content.targets
 
         def process_target(self, target: ast.stmt, parent: "Source.Node") -> None:
-            target_obj = self.child_factory(target, None)
+            target_obj = self.child_factory(target, parent=None)
             if not target_obj:
                 return
             value_obj = self.child_factory(self.content.value, parent)

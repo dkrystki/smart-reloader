@@ -24,6 +24,11 @@ if TYPE_CHECKING:
     from smartreloader.config import Config
 
 
+def my_sig_handler(sig, frame):
+    os._exit(0)
+signal.signal(signal.SIGINT, my_sig_handler)
+
+
 class Reloader(FileSystemEventHandler):
     def __init__(self, root: str, config: "Config"):
         self.root = Path(root)
@@ -35,10 +40,13 @@ class Reloader(FileSystemEventHandler):
 
         # self.logger.debug("Starting Inotify")
         self.observer = Observer()
+        self.observer.setDaemon(True)
         self.observer.schedule(self, str(self.root), recursive=True)
         watchdog.observers.inotify_buffer.logger.setLevel("INFO")
 
         signal.signal(signal.SIGUSR1, self._execute_full_reload)
+        # self.default_sigint_handler = signal.getsignal(signal.SIGINT)
+        # signal.signal(signal.SIGINT, self.stop)
 
     def _execute_full_reload(*args, **kwargs):
         sys.exit(3)
@@ -72,6 +80,7 @@ class Reloader(FileSystemEventHandler):
             self.config.after_rollback(path, self.partial_reloader.applied_actions)
 
             exc_type, exc_value, traceback = sys.exc_info()
+
             trace = Traceback.extract(exc_type, exc_value, traceback)
             trace.stacks[0].frames = trace.stacks[0].frames[-1:]
             trace.stacks = [trace.stacks[0]]
@@ -129,7 +138,7 @@ class Reloader(FileSystemEventHandler):
         self.observer.start()
         # self.logger.debug("Observer started")
 
-    def stop(self) -> None:
+    def stop(self, *args, **kwargs) -> None:
         self.observer.stop()
 
     def dispatch(self, event: FileSystemEvent):
