@@ -4,7 +4,7 @@ from tests.utils import Module, MockedPartialReloader
 
 class TestGlobalVariable(utils.TestBase):
     def test_modified_global_var_with_dependencies(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -117,7 +117,7 @@ class TestGlobalVariable(utils.TestBase):
         boss.assert_not_changed()
 
     def test_modified_import_star(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -174,7 +174,7 @@ class TestGlobalVariable(utils.TestBase):
         car.assert_not_changed()
 
     def test_modified_import_star_nested_twice(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -255,14 +255,14 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.global_var1: Variable')
+        reloader.assert_objects(module, 'sandbox.module.global_var1: Variable')
 
         module.append("global_var2 = 2")
 
         reloader.reload(module)
 
         reloader.assert_actions(
-            "Update Module: module", "Add Variable: module.global_var2"
+            "Update Module: sandbox.module", "Add Variable: sandbox.module.global_var2"
         )
 
         module.assert_obj_in("global_var1")
@@ -289,17 +289,17 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.Car: Class', 'module.car_class: Variable')
+        reloader.assert_objects(module, 'sandbox.module.Car: Class', 'sandbox.module.car_class: Variable')
 
         old_Car_class = module.device.Car
 
         module.replace("car_class = None", "car_class = Car")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Car: Class', 'module.car_class: Reference')
+        reloader.assert_objects(module, 'sandbox.module.Car: Class', 'sandbox.module.car_class: Reference')
 
         reloader.assert_actions(
-            "Update Module: module", "Update Variable: module.car_class"
+            "Update Module: sandbox.module", "Update Variable: sandbox.module.car_class"
         )
 
         assert module.device.Car is old_Car_class
@@ -323,18 +323,18 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.fun: Function', 'module.car_fun: Variable')
+        reloader.assert_objects(module, 'sandbox.module.fun: Function', 'sandbox.module.car_fun: Variable')
 
         old_fun = module.device.fun
 
         module.replace("car_fun = None", "car_fun = fun")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.fun: Function', 'module.car_fun: Reference')
+        reloader.assert_objects(module, 'sandbox.module.fun: Function', 'sandbox.module.car_fun: Reference')
 
         reloader.assert_actions(
-            "Update Module: module",
-            "Update Variable: module.car_fun",
+            "Update Module: sandbox.module",
+            "Update Variable: sandbox.module.car_fun",
         )
 
         assert module.device.fun is old_fun
@@ -372,16 +372,16 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.sprinkler_n: Variable',
-                                        'module.some_fun: Function',
-                                        'module.sample_dict: Dictionary',
-                                        'module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
-                                        'module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
-                                        'module.sample_dict.lambda_fun: DictionaryItem',
-                                        'module.sample_dict.fun: Reference',
-                                        'module.print_sprinkler: Function',
-                                        'module.Car: Class',
-                                        'module.Car.car_sprinkler_n: ClassVariable')
+        reloader.assert_objects(module, 'sandbox.module.sprinkler_n: Variable',
+                                        'sandbox.module.some_fun: Function',
+                                        'sandbox.module.sample_dict: Dictionary',
+                                        'sandbox.module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
+                                        'sandbox.module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
+                                        'sandbox.module.sample_dict.lambda_fun: DictionaryItem',
+                                        'sandbox.module.sample_dict.fun: Reference',
+                                        'sandbox.module.print_sprinkler: Function',
+                                        'sandbox.module.Car: Class',
+                                        'sandbox.module.Car.car_sprinkler_n: ClassVariable')
 
         print_sprinkler_id = id(module.device.print_sprinkler)
         lambda_fun_id = id(module.device.sample_dict["lambda_fun"])
@@ -406,23 +406,23 @@ class TestGlobalVariable(utils.TestBase):
         module.replace("sprinkler_n = 1", "sprinkler_n = 2")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.sprinkler_n: Variable',
-                                'module.some_fun: Function',
-                                'module.sample_dict: Dictionary',
-                                'module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
-                                'module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
-                                'module.sample_dict.lambda_fun: DictionaryItem',
-                                'module.sample_dict.fun: Reference',
-                                'module.print_sprinkler: Function',
-                                'module.Car: Class',
-                                'module.Car.car_sprinkler_n: ClassVariable')
+        reloader.assert_objects(module, 'sandbox.module.sprinkler_n: Variable',
+                                'sandbox.module.some_fun: Function',
+                                'sandbox.module.sample_dict: Dictionary',
+                                'sandbox.module.sample_dict.sprinkler_n_plus_1: DictionaryItem',
+                                'sandbox.module.sample_dict.sprinkler_n_plus_2: DictionaryItem',
+                                'sandbox.module.sample_dict.lambda_fun: DictionaryItem',
+                                'sandbox.module.sample_dict.fun: Reference',
+                                'sandbox.module.print_sprinkler: Function',
+                                'sandbox.module.Car: Class',
+                                'sandbox.module.Car.car_sprinkler_n: ClassVariable')
 
         reloader.assert_actions(
-            "Update Module: module",
-            "Update Variable: module.sprinkler_n",
-            "Update DictionaryItem: module.sample_dict.sprinkler_n_plus_1",
-            "Update DictionaryItem: module.sample_dict.sprinkler_n_plus_2",
-            "Update ClassVariable: module.Car.car_sprinkler_n",
+            "Update Module: sandbox.module",
+            "Update Variable: sandbox.module.sprinkler_n",
+            "Update DictionaryItem: sandbox.module.sample_dict.sprinkler_n_plus_1",
+            "Update DictionaryItem: sandbox.module.sample_dict.sprinkler_n_plus_2",
+            "Update ClassVariable: sandbox.module.Car.car_sprinkler_n",
         )
 
         assert print_sprinkler_id == id(module.device.print_sprinkler)
@@ -453,15 +453,15 @@ class TestGlobalVariable(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.cars_n: Variable', 'module.sprinkler_n: Variable')
+        reloader.assert_objects(module, 'sandbox.module.cars_n: Variable', 'sandbox.module.sprinkler_n: Variable')
 
         module.delete("sprinkler_n = 1")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.cars_n: Variable')
+        reloader.assert_objects(module, 'sandbox.module.cars_n: Variable')
 
         reloader.assert_actions(
-            "Update Module: module", "Delete Variable: module.sprinkler_n"
+            "Update Module: sandbox.module", "Delete Variable: sandbox.module.sprinkler_n"
         )
 
         assert not hasattr(module.device, "sprinkler_n")

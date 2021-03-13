@@ -21,7 +21,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.math: Import', 'module.global_var: Variable', 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.math: Import', 'sandbox.module.global_var: Variable', 'sandbox.module.fun: Function')
             module.assert_not_changed()
 
         assert_not_reloaded()
@@ -34,12 +34,12 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.math: Import',
-                                        'module.global_var: Variable',
-                                        'module.fun: Function',
-                                        'module.fun2: Function')
+        reloader.assert_objects(module, 'sandbox.module.math: Import',
+                                        'sandbox.module.global_var: Variable',
+                                        'sandbox.module.fun: Function',
+                                        'sandbox.module.fun2: Function')
 
-        reloader.assert_actions("Update Module: module", "Add Function: module.fun2")
+        reloader.assert_actions("Update Module: sandbox.module", "Add Function: sandbox.module.fun2")
 
         module.assert_obj_in("fun")
         module.assert_obj_in("fun2")
@@ -72,7 +72,7 @@ class TestFunctions(utils.TestBase):
             assert module.device.fun("str1", "str2").endswith(str(global_var_id))
             assert module.device.fun("str1", "str2").startswith("str1_str2")
             assert id(module.device.fun) == fun_id_before
-            reloader.assert_objects(module, 'module.math: Import', 'module.global_var: Variable', 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.math: Import', 'sandbox.module.global_var: Variable', 'sandbox.module.fun: Function')
             module.assert_not_changed()
 
         assert_not_reloaded()
@@ -89,9 +89,9 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.math: Import', 'module.global_var: Variable', 'module.fun: Function')
+        reloader.assert_objects(module, 'sandbox.module.math: Import', 'sandbox.module.global_var: Variable', 'sandbox.module.fun: Function')
         reloader.assert_actions(
-            "Update Module: module", "Update Function: module.fun"
+            "Update Module: sandbox.module", "Update Function: sandbox.module.fun"
         )
 
         module.assert_obj_in("fun")
@@ -119,7 +119,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.fun1: Function', 'module.fun2: Function')
+            reloader.assert_objects(module, 'sandbox.module.fun1: Function', 'sandbox.module.fun2: Function')
             module.assert_not_changed()
 
         module.rewrite(
@@ -130,10 +130,10 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.fun1: Function')
+        reloader.assert_objects(module, 'sandbox.module.fun1: Function')
 
         reloader.assert_actions(
-            "Update Module: module", "Delete Function: module.fun2"
+            "Update Module: sandbox.module", "Delete Function: sandbox.module.fun2"
         )
 
         assert hasattr(module.device, "fun1")
@@ -156,7 +156,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.fun1: Function')
+            reloader.assert_objects(module, 'sandbox.module.fun1: Function')
             module.assert_not_changed()
 
         assert_not_reloaded()
@@ -169,11 +169,11 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.fun_renamed: Function')
+        reloader.assert_objects(module, 'sandbox.module.fun_renamed: Function')
         reloader.assert_actions(
-            "Update Module: module",
-            "Add Function: module.fun_renamed",
-            "Delete Function: module.fun1",
+            "Update Module: sandbox.module",
+            "Add Function: sandbox.module.fun_renamed",
+            "Delete Function: sandbox.module.fun1",
         )
 
         assert not hasattr(module.device, "fun1")
@@ -207,10 +207,10 @@ class TestFunctions(utils.TestBase):
         fun_id = id(module.device.fun)
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.Car: Class',
-                                            'module.Car.engine_power: ClassVariable',
-                                            'module.Car.__init__: Method',
-                                            'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.Car: Class',
+                                            'sandbox.module.Car.engine_power: ClassVariable',
+                                            'sandbox.module.Car.__init__: Method',
+                                            'sandbox.module.fun: Function')
             assert module.device.fun().colour == "red"
             assert id(module.device.Car) == car_class_id
             assert id(module.device.fun) == fun_id
@@ -222,13 +222,13 @@ class TestFunctions(utils.TestBase):
         module.replace('car = Car("red")', 'car = Car("green")')
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.Car: Class',
-                                        'module.Car.engine_power: ClassVariable',
-                                        'module.Car.__init__: Method',
-                                        'module.fun: Function')
+        reloader.assert_objects(module, 'sandbox.module.Car: Class',
+                                        'sandbox.module.Car.engine_power: ClassVariable',
+                                        'sandbox.module.Car.__init__: Method',
+                                        'sandbox.module.fun: Function')
 
         reloader.assert_actions(
-            "Update Module: module", "Update Function: module.fun"
+            "Update Module: sandbox.module", "Update Function: sandbox.module.fun"
         )
 
         assert id(module.device.Car) == car_class_id
@@ -258,7 +258,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.other_fun: Function', 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.other_fun: Function', 'sandbox.module.fun: Function')
             module.assert_not_changed()
             assert module.device.fun() == 15
 
@@ -267,9 +267,9 @@ class TestFunctions(utils.TestBase):
         module.replace("return 5", "return 10")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.other_fun: Function', 'module.fun: Function')
+        reloader.assert_objects(module, 'sandbox.module.other_fun: Function', 'sandbox.module.fun: Function')
         reloader.assert_actions(
-            "Update Module: module", "Update Function: module.other_fun"
+            "Update Module: sandbox.module", "Update Function: sandbox.module.other_fun"
         )
 
         assert module.device.fun() == 20
@@ -294,7 +294,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.other_fun: Function', 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.other_fun: Function', 'sandbox.module.fun: Function')
             module.assert_not_changed()
             assert module.device.fun() == 15
 
@@ -311,12 +311,12 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.other_fun: Function', 'module.fun: Function')
+        reloader.assert_objects(module, 'sandbox.module.other_fun: Function', 'sandbox.module.fun: Function')
 
         reloader.assert_actions(
-            "Update Module: module",
-            "Update Function: module.other_fun",
-            "Update Function: module.fun",
+            "Update Module: sandbox.module",
+            "Update Function: sandbox.module.other_fun",
+            "Update Function: sandbox.module.fun",
         )
 
         assert module.device.fun() == 25
@@ -337,7 +337,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.fun: Function')
             module.assert_not_changed()
             assert module.device.fun() == 10
 
@@ -354,12 +354,12 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.other_fun: Function', 'module.fun: Function')
+        reloader.assert_objects(module, 'sandbox.module.other_fun: Function', 'sandbox.module.fun: Function')
 
         reloader.assert_actions(
-            "Update Module: module",
-            "Add Function: module.other_fun",
-            "Update Function: module.fun",
+            "Update Module: sandbox.module",
+            "Add Function: sandbox.module.other_fun",
+            "Update Function: sandbox.module.fun",
         )
 
         assert module.device.fun() == 20
@@ -381,7 +381,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.fun: Function')
             assert module.device.fun() == 10
             module.assert_not_changed()
 
@@ -397,9 +397,9 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.fun: Function')
+        reloader.assert_objects(module, 'sandbox.module.fun: Function')
 
-        reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
+        reloader.assert_actions('Update Module: sandbox.module', 'Update Function: sandbox.module.fun')
         assert module.device.fun() == 15
 
         reloader.rollback()
@@ -421,7 +421,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.fun: Function')
             assert module.device.fun() == 15
             module.assert_not_changed()
 
@@ -437,9 +437,9 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.fun: Function')
+        reloader.assert_objects(module, 'sandbox.module.fun: Function')
 
-        reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
+        reloader.assert_actions('Update Module: sandbox.module', 'Update Function: sandbox.module.fun')
         assert module.device.fun() == 30
 
         reloader.rollback()
@@ -469,8 +469,8 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.fun: Function')
-        reloader.assert_actions('Update Module: module', 'Add Function: module.fun')
+        reloader.assert_objects(module, 'sandbox.module.fun: Function')
+        reloader.assert_actions('Update Module: sandbox.module', 'Add Function: sandbox.module.fun')
         assert module.device.fun(5) == 15
 
         reloader.rollback()
@@ -489,7 +489,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.fun: Function')
             module.assert_not_changed()
             assert module.device.fun(5) == 15
 
@@ -502,8 +502,8 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.fun: Function')
-        reloader.assert_actions('Update Module: module', 'Update Function: module.fun')
+        reloader.assert_objects(module, 'sandbox.module.fun: Function')
+        reloader.assert_actions('Update Module: sandbox.module', 'Update Function: sandbox.module.fun')
         assert module.device.fun(5) == 50
 
         reloader.rollback()
@@ -523,7 +523,7 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.fun: Function')
+            reloader.assert_objects(module, 'sandbox.module.fun: Function')
             module.assert_not_changed()
 
         assert module.device.fun.__code__.co_firstlineno == 2
@@ -540,10 +540,10 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.added_fun: Function', 'module.fun: Function')
-        reloader.assert_actions('Update Module: module',
-                                'Add Function: module.added_fun',
-                                'Move Function: module.fun')
+        reloader.assert_objects(module, 'sandbox.module.added_fun: Function', 'sandbox.module.fun: Function')
+        reloader.assert_actions('Update Module: sandbox.module',
+                                'Add Function: sandbox.module.added_fun',
+                                'Move Function: sandbox.module.fun')
 
         assert module.device.fun.__code__.co_firstlineno == 5
         reloader.rollback()
@@ -571,9 +571,9 @@ class TestFunctions(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.eat_more: Function',
-                                            'module.how_many_eat: Function',
-                                            'module.ref_fun: Reference')
+            reloader.assert_objects(module, 'sandbox.module.eat_more: Function',
+                                            'sandbox.module.how_many_eat: Function',
+                                            'sandbox.module.ref_fun: Reference')
             module.assert_not_changed()
             assert module.device.how_many_eat() == 1
             assert module.device.ref_fun() == 1
@@ -596,10 +596,10 @@ class TestFunctions(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.eat_more: Function',
-                                        'module.how_many_eat: Function',
-                                        'module.ref_fun: Reference')
-        reloader.assert_actions('Update Module: module', 'DeepUpdate Function: module.how_many_eat')
+        reloader.assert_objects(module, 'sandbox.module.eat_more: Function',
+                                        'sandbox.module.how_many_eat: Function',
+                                        'sandbox.module.ref_fun: Reference')
+        reloader.assert_actions('Update Module: sandbox.module', 'DeepUpdate Function: sandbox.module.how_many_eat')
 
         assert module.device.how_many_eat() == 11
         assert module.device.ref_fun() == 11

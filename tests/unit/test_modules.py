@@ -8,7 +8,7 @@ from tests.utils import Module, MockedPartialReloader
 
 class TestModules(utils.TestBase):
     def test_import_relative(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -80,7 +80,7 @@ class TestModules(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.glob_var: Variable')
+            reloader.assert_objects(module, 'sandbox.module.glob_var: Variable')
             module.assert_obj_not_in("math")
             module.assert_not_changed()
 
@@ -94,9 +94,9 @@ class TestModules(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.math: Import', 'module.glob_var: Variable')
+        reloader.assert_objects(module, 'sandbox.module.math: Import', 'sandbox.module.glob_var: Variable')
 
-        reloader.assert_actions('Update Module: module', 'Add Import: module.math')
+        reloader.assert_actions('Update Module: sandbox.module', 'Add Import: sandbox.module.math')
 
         module.assert_obj_in("math")
 
@@ -118,7 +118,7 @@ class TestModules(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.math: Import')
+            reloader.assert_objects(module, 'sandbox.module.math: Import')
             module.assert_not_changed()
 
         assert_not_reloaded()
@@ -128,14 +128,14 @@ class TestModules(utils.TestBase):
         reloader.reload(module)
 
         assert_not_reloaded()
-        reloader.assert_actions("Update Module: module")
+        reloader.assert_actions("Update Module: sandbox.module")
 
         module.assert_obj_in("math")
         reloader.rollback()
         assert_not_reloaded()
 
     def test_add_relative(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -192,7 +192,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_error_rolls_back(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -299,7 +299,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_update__all__(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -377,7 +377,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_add__all__(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -448,7 +448,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_delete__all__(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -587,7 +587,7 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_star_import_add_obj(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
@@ -742,11 +742,13 @@ class TestModules(utils.TestBase):
         assert_not_reloaded()
 
     def test_not_reloading_on_removed_star_import(self, sandbox):
-        reloader = MockedPartialReloader(sandbox.parent)
+        reloader = MockedPartialReloader(sandbox)
 
         init = Module(
             "__init__.py",
             """
+        from . import slave_module_1
+        from . import slave_module_2
         from . import module
         """,
         )
@@ -825,3 +827,136 @@ class TestModules(utils.TestBase):
         reloader.assert_objects(slave_module_2, 'sandbox.slave_module_2.car_2: Variable')
         reloader.assert_objects(slave_module_1, 'sandbox.slave_module_1.car_1: Variable')
         reloader.assert_objects(module, 'sandbox.module.car_1: Foreigner')
+
+    def test_swap_modules(self, sandbox):
+        reloader = MockedPartialReloader(sandbox)
+
+        init = Module(
+            "__init__.py",
+            """
+        from . import cupcake as dessert
+        """,
+        )
+
+        cupcake = Module(
+            "cupcake.py",
+            """
+        name = "cupcake"
+        """,
+        )
+
+        muffin = Module(
+            "muffin.py",
+            """
+        name = "muffin"
+        """,
+        )
+        init.load()
+
+        def assert_not_reloaded():
+            assert init.device.dessert.name == "cupcake"
+            reloader.assert_objects(init, 'sandbox.cupcake: Import', 'sandbox.dessert: Import')
+
+        assert_not_reloaded()
+
+        reloader.reload(init)
+        reloader.assert_actions('Update Module: sandbox',)
+
+        init.rewrite(
+            """
+        from . import muffin as dessert
+        """
+        )
+
+        reloader.reload(init)
+        reloader.assert_objects(init, 'sandbox.cupcake: Import', 'sandbox.muffin: Import', 'sandbox.dessert: Import')
+
+        assert init.device.dessert.name == "muffin"
+
+        reloader.assert_actions('Update Module: sandbox', 'Update Import: sandbox.dessert')
+        reloader.assert_objects(init, 'sandbox.cupcake: Import', 'sandbox.muffin: Import', 'sandbox.dessert: Import')
+
+        reloader.rollback()
+        assert_not_reloaded()
+
+    def test_reloading_out_of_sync_modules(self, sandbox):
+        reloader = MockedPartialReloader(sandbox)
+
+        init = Module(
+            "__init__.py",
+            """
+        from . import cakeshop
+        from . import cake
+        from . import decoration
+        """,
+        )
+
+        cakeshop = Module(
+            "cakeshop.py",
+            """
+        from . import cake
+        total_size = 1 / cake.size
+        """,
+        )
+        cake = Module(
+            "cake.py",
+            """
+        from . import decoration
+        size =  decoration.size * 10
+        """,
+        )
+
+        decoration = Module(
+            "decoration.py",
+            """
+        size = 10
+        """,
+        )
+        init.load()
+        cakeshop.load_from(init)
+        cake.load_from(init)
+        decoration.load_from(init)
+
+        def assert_not_reloaded():
+            reloader.assert_objects(init, 'sandbox.cakeshop: Import',
+                                          'sandbox.cake: Import',
+                                          'sandbox.decoration: Import')
+
+            reloader.assert_objects(cakeshop, 'sandbox.cakeshop.cake: Import', 'sandbox.cakeshop.total_size: Variable')
+            reloader.assert_objects(cake, 'sandbox.cake.decoration: Import', 'sandbox.cake.size: Variable')
+            reloader.assert_objects(decoration, 'sandbox.decoration.size: Variable')
+
+        assert_not_reloaded()
+
+        decoration.rewrite("size = 0")
+
+        with raises(ZeroDivisionError):
+            reloader.reload(decoration)
+
+        reloader.assert_actions('Update Module: sandbox.decoration',
+                                'Update Variable: sandbox.decoration.size',
+                                'Update Module: sandbox.cake',
+                                'Update Variable: sandbox.cake.size',
+                                'Update Module: sandbox.cakeshop')
+
+        reloader.rollback()
+        assert_not_reloaded()
+
+        cakeshop.rewrite("""
+        from . import cake
+        total_size = cake.size * 10
+        """)
+        reloader.reload(cakeshop)
+        reloader.assert_actions('Update Module: sandbox.cakeshop',
+                                'Update Variable: sandbox.cakeshop.total_size',
+                                'Update Module: sandbox.decoration',
+                                'Update Variable: sandbox.decoration.size',
+                                'Update Module: sandbox.cake',
+                                'Update Variable: sandbox.cake.size',
+                                )
+
+        assert cakeshop.device.total_size == 1000
+        reloader.rollback()
+
+        assert_not_reloaded()
+        assert cakeshop.device.total_size == 0.01

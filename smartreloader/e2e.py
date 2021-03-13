@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 __all__ = []
 
-STICKYBEAK_PORT = 5243
+STICKYBEAK_PORT = 5246
 
 enabled = "SMART_RELOADER_E2E_TEST" in os.environ
 

@@ -697,7 +697,21 @@ class Import(FinalObj):
         return 30
 
     def get_actions_for_update(self, new_obj: "Variable") -> List["BaseAction"]:
-        return []
+        if new_obj.python_obj is self.python_obj:
+            return []
+
+        ret = [
+            self.Update(
+                reloader=self.reloader,
+                parent=self.parent,
+                obj=self,
+                new_obj=new_obj,
+            )
+        ]
+
+        ret.extend(self.get_actions_for_dependent_modules())
+
+        return ret
 
     # def get_actions_for_add(
     #     self, reloader: "PartialReloader", parent: "ContainerObj", obj: "Object"

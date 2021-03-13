@@ -20,7 +20,7 @@ class TestPlugins(utils.TestBase):
         )
 
         module.load()
-        reloader.assert_objects(module, 'module.pd: Import', 'module.df1: Dataframe', 'module.df2: Dataframe')
+        reloader.assert_objects(module, 'sandbox.module.pd: Import', 'sandbox.module.df1: Dataframe', 'sandbox.module.df2: Dataframe')
 
         module.rewrite(
             """
@@ -31,6 +31,6 @@ class TestPlugins(utils.TestBase):
         )
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.pd: Import', 'module.df1: Dataframe', 'module.df2: Dataframe')
+        reloader.assert_objects(module, 'sandbox.module.pd: Import', 'sandbox.module.df1: Dataframe', 'sandbox.module.df2: Dataframe')
 
-        reloader.assert_actions('Update Module: module', 'Update Pandas.Dataframe: module.df2')
+        reloader.assert_actions('Update Module: sandbox.module', 'Update Pandas.Dataframe: sandbox.module.df2')

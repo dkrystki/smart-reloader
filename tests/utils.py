@@ -18,12 +18,6 @@ logger = getLogger(__name__)
 from smartreloader import dependency_watcher, misc
 
 
-def load_module(name: str) -> Any:
-    module = builtins.__import__(name)
-    # TODO: this shouldn't be needed
-    # dependency_watcher.import_order.insert(0, module.__file__)
-    return module
-
 
 class TestBase:
     @pytest.fixture(autouse=True)
@@ -33,7 +27,8 @@ class TestBase:
 
         yield
 
-        sys.path.remove(str(sandbox.parent))
+        if str(sandbox.parent) in sys.path:
+            sys.path.remove(str(sandbox.parent))
 
 
 class WhatStringNotFound(Exception):
@@ -80,15 +75,16 @@ class Module:
 
     @property
     def name(self) -> str:
-        if self.path.stem != "__init__":
-            name = self.path.stem
-        else:
-            name = self.path.parent.absolute().stem
-
-        return name
+        return self.path.stem
 
     def load(self) -> None:
-        self.device = load_module(self.name)
+        module_name = f"sandbox.{self.name}"
+        if ".__init__" in module_name:
+            module_name = module_name.rstrip(".__init__")
+            self.device = builtins.__import__(module_name)
+        else:
+            self.device = getattr(builtins.__import__(module_name), self.name)
+
         self.set_initial_state()
 
     def set_initial_state(self) -> None:

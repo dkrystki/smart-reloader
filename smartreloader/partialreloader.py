@@ -25,7 +25,7 @@ from .config import BaseConfig
 
 __all__ = ["PartialReloader"]
 
-from smartreloader.objects.modules import ModuleDescriptor, Modules, UpdateModule
+from smartreloader.objects.modules import ModuleDescriptor, Modules, UpdateModule, Module
 from .objects import Stack
 
 
@@ -88,6 +88,7 @@ class PartialReloader:
 
     config: Optional["BaseConfig"] = BaseConfig()
     applied_actions: List[BaseAction] = field(init=False, default_factory=list)
+    modules_out_of_sync: List[Module] = field(init=False, default_factory=list)
     modules: Modules = field(init=False)
     object_classes_manager: ObjectClassesManager = field(init=False)
     plugins: List[ModuleType] = field(init=False, default_factory=list)
@@ -159,6 +160,13 @@ class PartialReloader:
 
         pass
 
+    def _reload_module(self, module_file: Path, dry_run=False) -> None:
+        actions = UpdateModule.factory(reloader=self, module_file=module_file, dry_run=dry_run)
+
+        for a in actions:
+            a.pre_execute()
+            a.execute(dry_run)
+
     def reload(self, module_file: Path, dry_run=False) -> None:
         """
         :return: True if succeded False i unable to reload
@@ -166,15 +174,23 @@ class PartialReloader:
         self.reset()
         self._collect_all_dependencies()
 
-        actions = UpdateModule.factory(reloader=self, module_file=module_file, dry_run=dry_run)
+        self._reload_module(module_file, dry_run)
 
-        for a in actions:
-            a.pre_execute()
-            a.execute(dry_run)
+        while self.modules_out_of_sync:
+            m = self.modules_out_of_sync.pop(0)
+
+            if m.already_updated(self.applied_actions):
+                continue
+
+            self._reload_module(m.module_descriptor.path, dry_run)
 
         # stack = Stack(logger=self.logger, module_file=module_file, reloader=self)
         # stack.update()
 
     def rollback(self) -> None:
         for a in reversed(self.applied_actions):
+            if isinstance(a, UpdateModule):
+                self.modules_out_of_sync.append(a.module_descriptor.module_obj)
             a.rollback()
+
+        self.modules_out_of_sync.reverse()

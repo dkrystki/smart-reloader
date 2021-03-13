@@ -450,15 +450,12 @@ class UpdateModule(BaseAction):
         # for example it's the entrypoint and still executing
         if not self.module_descriptor.module_obj:
             self.module_descriptor.post_execute()
-
-        self.logger.debug("Old module: ")
-
-        self.logger.debug("\n".join(self.module_descriptor.module_obj.get_obj_strs()))
         self.disable_pydev_warning()
 
         trace = sys.gettrace()
         sys.settrace(None)
-        module_python_obj = misc.import_from_file(self.module_descriptor.path, self.reloader.root)
+        module_python_obj = misc.import_from_file(self.module_descriptor.path, self.reloader.root.parent,
+                                                  module_name=self.module_descriptor.name)
         sys.settrace(trace)
 
         new_module_descriptor = ModuleDescriptor(reloader=self.reloader,
@@ -466,9 +463,6 @@ class UpdateModule(BaseAction):
                                                  path=self.module_descriptor.path,
                                                  body=module_python_obj)
         new_module_descriptor.post_execute()
-
-        self.logger.debug("New module: ")
-        self.logger.debug("\n".join(new_module_descriptor.module_obj.get_obj_strs()))
 
         actions = self.module_descriptor.module_obj.get_actions_for_update(new_module_descriptor.module_obj)
         actions.sort(key=lambda a: a.priority, reverse=True)
@@ -559,3 +553,11 @@ class Module(ContainerObj):
             ret.update(o.get_flat_repr())
 
         return ret
+
+    def already_updated(self, applied_actions: List[BaseAction]) -> bool:
+        for a in applied_actions:
+            if isinstance(a, UpdateModule):
+                if a.module_descriptor.path == self.module_descriptor.path:
+                    return True
+
+        return False

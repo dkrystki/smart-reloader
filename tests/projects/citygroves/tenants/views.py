@@ -27,7 +27,7 @@ e = 123131361123
 
 
 GLOBAL_VAR = "hihi23"
-test = "fsfsd"
+test = "fsfsda"
 
 
 class TestClass(int):
@@ -157,5 +157,6 @@ class AddressesViewset(
 ):
     queryset = models.Address.objects.all()
     serializer_class = serializers.AddressSerializer
+
 
 

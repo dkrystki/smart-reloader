@@ -21,24 +21,24 @@ class TestDictionaries(utils.TestBase):
 
         def assert_not_reloaded():
             module.assert_not_changed()
-            reloader.assert_objects(module, 'module.car_data: Dictionary',
-                                            'module.car_data.engine_power: DictionaryItem',
-                                            'module.car_data.max_speed: DictionaryItem',
-                                            'module.car_data.seats: DictionaryItem')
+            reloader.assert_objects(module, 'sandbox.module.car_data: Dictionary',
+                                            'sandbox.module.car_data.engine_power: DictionaryItem',
+                                            'sandbox.module.car_data.max_speed: DictionaryItem',
+                                            'sandbox.module.car_data.seats: DictionaryItem')
         assert_not_reloaded()
 
         module.replace('"engine_power": 200', '"engine_power": 250')
 
         reloader.reload(module)
 
-        reloader.assert_objects(module, 'module.car_data: Dictionary',
-                                'module.car_data.engine_power: DictionaryItem',
-                                'module.car_data.max_speed: DictionaryItem',
-                                'module.car_data.seats: DictionaryItem')
+        reloader.assert_objects(module, 'sandbox.module.car_data: Dictionary',
+                                'sandbox.module.car_data.engine_power: DictionaryItem',
+                                'sandbox.module.car_data.max_speed: DictionaryItem',
+                                'sandbox.module.car_data.seats: DictionaryItem')
 
         reloader.assert_actions(
-            "Update Module: module",
-            "Update DictionaryItem: module.car_data.engine_power",
+            "Update Module: sandbox.module",
+            "Update DictionaryItem: sandbox.module.car_data.engine_power",
         )
 
         reloader.rollback()
@@ -61,23 +61,23 @@ class TestDictionaries(utils.TestBase):
 
         def assert_not_reloaded():
             module.assert_not_changed()
-            reloader.assert_objects(module, 'module.car_data: Dictionary',
-                                            'module.car_data.max_speed: DictionaryItem',
-                                            'module.car_data.seats: DictionaryItem',
-                                            'module.car_data.engine_power: DictionaryItem')
+            reloader.assert_objects(module, 'sandbox.module.car_data: Dictionary',
+                                            'sandbox.module.car_data.max_speed: DictionaryItem',
+                                            'sandbox.module.car_data.seats: DictionaryItem',
+                                            'sandbox.module.car_data.engine_power: DictionaryItem')
 
         module.replace("engine_power", "engine_force")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.car_data: Dictionary',
-                                        'module.car_data.max_speed: DictionaryItem',
-                                        'module.car_data.seats: DictionaryItem',
-                                        'module.car_data.engine_force: DictionaryItem')
+        reloader.assert_objects(module, 'sandbox.module.car_data: Dictionary',
+                                        'sandbox.module.car_data.max_speed: DictionaryItem',
+                                        'sandbox.module.car_data.seats: DictionaryItem',
+                                        'sandbox.module.car_data.engine_force: DictionaryItem')
 
         reloader.assert_actions(
-            "Update Module: module",
-            "Add DictionaryItem: module.car_data.engine_force",
-            "Delete DictionaryItem: module.car_data.engine_power",
+            "Update Module: sandbox.module",
+            "Add DictionaryItem: sandbox.module.car_data.engine_force",
+            "Delete DictionaryItem: sandbox.module.car_data.engine_power",
         )
 
         assert "engine_power" not in module.device.car_data
@@ -104,25 +104,25 @@ class TestDictionaries(utils.TestBase):
 
         def assert_not_reloaded():
             module.assert_not_changed()
-            reloader.assert_objects(module, 'module.car_data: Dictionary',
-                                    'module.car_data.max_speed: DictionaryItem',
-                                    'module.car_data.seats: DictionaryItem',
-                                    'module.car_data.engine_power: DictionaryItem')
+            reloader.assert_objects(module, 'sandbox.module.car_data: Dictionary',
+                                    'sandbox.module.car_data.max_speed: DictionaryItem',
+                                    'sandbox.module.car_data.seats: DictionaryItem',
+                                    'sandbox.module.car_data.engine_power: DictionaryItem')
         assert_not_reloaded()
 
         module.replace('"engine_power": 200', '"engine_force": 250')
 
         reloader.reload(module)
 
-        reloader.assert_objects(module, 'module.car_data: Dictionary',
-                                        'module.car_data.max_speed: DictionaryItem',
-                                        'module.car_data.seats: DictionaryItem',
-                                        'module.car_data.engine_force: DictionaryItem')
+        reloader.assert_objects(module, 'sandbox.module.car_data: Dictionary',
+                                        'sandbox.module.car_data.max_speed: DictionaryItem',
+                                        'sandbox.module.car_data.seats: DictionaryItem',
+                                        'sandbox.module.car_data.engine_force: DictionaryItem')
 
         reloader.assert_actions(
-            "Update Module: module",
-            "Add DictionaryItem: module.car_data.engine_force",
-            "Delete DictionaryItem: module.car_data.engine_power",
+            "Update Module: sandbox.module",
+            "Add DictionaryItem: sandbox.module.car_data.engine_force",
+            "Delete DictionaryItem: sandbox.module.car_data.engine_power",
         )
 
         assert "engine_power" not in module.device.car_data
@@ -144,7 +144,7 @@ class TestDictionaries(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.some_var: Variable')
+            reloader.assert_objects(module, 'sandbox.module.some_var: Variable')
             module.assert_not_changed()
         assert_not_reloaded()
 
@@ -162,14 +162,14 @@ class TestDictionaries(utils.TestBase):
 
         reloader.reload(module)
         reloader.assert_actions(
-            "Update Module: module", "Add Dictionary: module.car_data"
+            "Update Module: sandbox.module", "Add Dictionary: sandbox.module.car_data"
         )
 
-        reloader.assert_objects(module, 'module.some_var: Variable',
-                                        'module.car_data: Dictionary',
-                                        'module.car_data.engine_power: DictionaryItem',
-                                        'module.car_data.max_speed: DictionaryItem',
-                                        'module.car_data.seats: DictionaryItem')
+        reloader.assert_objects(module, 'sandbox.module.some_var: Variable',
+                                        'sandbox.module.car_data: Dictionary',
+                                        'sandbox.module.car_data.engine_power: DictionaryItem',
+                                        'sandbox.module.car_data.max_speed: DictionaryItem',
+                                        'sandbox.module.car_data.seats: DictionaryItem')
 
         module.assert_obj_in("car_data")
 
@@ -196,11 +196,11 @@ class TestDictionaries(utils.TestBase):
 
         def assert_not_reloaded():
             module.assert_not_changed()
-            reloader.assert_objects(module, 'module.some_var: Variable',
-                                            'module.car_data: Dictionary',
-                                            'module.car_data.engine_power: DictionaryItem',
-                                            'module.car_data.max_speed: DictionaryItem',
-                                            'module.car_data.seats: DictionaryItem')
+            reloader.assert_objects(module, 'sandbox.module.some_var: Variable',
+                                            'sandbox.module.car_data: Dictionary',
+                                            'sandbox.module.car_data.engine_power: DictionaryItem',
+                                            'sandbox.module.car_data.max_speed: DictionaryItem',
+                                            'sandbox.module.car_data.seats: DictionaryItem')
         assert_not_reloaded()
 
         module.rewrite(
@@ -211,9 +211,9 @@ class TestDictionaries(utils.TestBase):
 
         reloader.reload(module)
 
-        reloader.assert_objects(module, 'module.some_var: Variable')
+        reloader.assert_objects(module, 'sandbox.module.some_var: Variable')
         reloader.assert_actions(
-            "Update Module: module", "Delete Dictionary: module.car_data"
+            "Update Module: sandbox.module", "Delete Dictionary: sandbox.module.car_data"
         )
 
         module.assert_obj_not_in("car_data")
@@ -240,26 +240,26 @@ class TestDictionaries(utils.TestBase):
 
         def assert_not_reloaded():
             module.assert_not_changed()
-            reloader.assert_objects(module, 'module.some_var: Variable',
-                                    'module.car_data: Dictionary',
-                                    'module.car_data.engine_power: DictionaryItem',
-                                    'module.car_data.max_speed: DictionaryItem',
-                                    'module.car_data.seats: DictionaryItem')
+            reloader.assert_objects(module, 'sandbox.module.some_var: Variable',
+                                    'sandbox.module.car_data: Dictionary',
+                                    'sandbox.module.car_data.engine_power: DictionaryItem',
+                                    'sandbox.module.car_data.max_speed: DictionaryItem',
+                                    'sandbox.module.car_data.seats: DictionaryItem')
 
         assert_not_reloaded()
 
         module.replace("car_data", "car_specs")
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.some_var: Variable',
-                                        'module.car_specs: Dictionary',
-                                        'module.car_specs.engine_power: DictionaryItem',
-                                        'module.car_specs.max_speed: DictionaryItem',
-                                        'module.car_specs.seats: DictionaryItem')
+        reloader.assert_objects(module, 'sandbox.module.some_var: Variable',
+                                        'sandbox.module.car_specs: Dictionary',
+                                        'sandbox.module.car_specs.engine_power: DictionaryItem',
+                                        'sandbox.module.car_specs.max_speed: DictionaryItem',
+                                        'sandbox.module.car_specs.seats: DictionaryItem')
         reloader.assert_actions(
-            "Update Module: module",
-            "Add Dictionary: module.car_specs",
-            "Delete Dictionary: module.car_data",
+            "Update Module: sandbox.module",
+            "Add Dictionary: sandbox.module.car_specs",
+            "Delete Dictionary: sandbox.module.car_data",
         )
 
         module.assert_obj_in("car_specs")
@@ -288,12 +288,12 @@ class TestDictionaries(utils.TestBase):
         module.load()
 
         def assert_not_reloaded():
-            reloader.assert_objects(module, 'module.cake_shop: Dictionary',
-                                    'module.cake_shop.cakes: DictionaryItem',
-                                    'module.cake_shop.cupcakes: DictionaryItem',
-                                    'module.cake_shop.clients: Dictionary',
-                                    'module.cake_shop.clients.number: DictionaryItem',
-                                    'module.cake_shop.clients.growth_per_month: DictionaryItem')
+            reloader.assert_objects(module, 'sandbox.module.cake_shop: Dictionary',
+                                    'sandbox.module.cake_shop.cakes: DictionaryItem',
+                                    'sandbox.module.cake_shop.cupcakes: DictionaryItem',
+                                    'sandbox.module.cake_shop.clients: Dictionary',
+                                    'sandbox.module.cake_shop.clients.number: DictionaryItem',
+                                    'sandbox.module.cake_shop.clients.growth_per_month: DictionaryItem')
             assert module.device.cake_shop["clients"]["number"] == 100
 
         assert_not_reloaded()
@@ -301,15 +301,15 @@ class TestDictionaries(utils.TestBase):
         module.replace('"number": 100', '"number": 150')
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.cake_shop: Dictionary',
-                                'module.cake_shop.cakes: DictionaryItem',
-                                'module.cake_shop.cupcakes: DictionaryItem',
-                                'module.cake_shop.clients: Dictionary',
-                                'module.cake_shop.clients.number: DictionaryItem',
-                                'module.cake_shop.clients.growth_per_month: DictionaryItem')
+        reloader.assert_objects(module, 'sandbox.module.cake_shop: Dictionary',
+                                'sandbox.module.cake_shop.cakes: DictionaryItem',
+                                'sandbox.module.cake_shop.cupcakes: DictionaryItem',
+                                'sandbox.module.cake_shop.clients: Dictionary',
+                                'sandbox.module.cake_shop.clients.number: DictionaryItem',
+                                'sandbox.module.cake_shop.clients.growth_per_month: DictionaryItem')
 
-        reloader.assert_actions('Update Module: module',
-                                'Update DictionaryItem: module.cake_shop.clients.number')
+        reloader.assert_actions('Update Module: sandbox.module',
+                                'Update DictionaryItem: sandbox.module.cake_shop.clients.number')
 
         assert module.device.cake_shop["clients"]["number"] == 150
 
@@ -336,10 +336,10 @@ class TestDictionaries(utils.TestBase):
         def assert_not_reloaded():
             assert module.device.cake_shop["clients"] is None
             module.assert_not_changed()
-            reloader.assert_objects(module, 'module.cake_shop: Dictionary',
-                                             'module.cake_shop.cakes: DictionaryItem',
-                                             'module.cake_shop.cupcakes: DictionaryItem',
-                                             'module.cake_shop.clients: DictionaryItem')
+            reloader.assert_objects(module, 'sandbox.module.cake_shop: Dictionary',
+                                             'sandbox.module.cake_shop.cakes: DictionaryItem',
+                                             'sandbox.module.cake_shop.cupcakes: DictionaryItem',
+                                             'sandbox.module.cake_shop.clients: DictionaryItem')
 
         assert_not_reloaded()
 
@@ -355,13 +355,13 @@ class TestDictionaries(utils.TestBase):
         """)
 
         reloader.reload(module)
-        reloader.assert_objects(module, 'module.cake_shop: Dictionary',
-                                        'module.cake_shop.cakes: DictionaryItem',
-                                        'module.cake_shop.cupcakes: DictionaryItem',
-                                        'module.cake_shop.clients: Dictionary',
-                                        'module.cake_shop.clients.number: DictionaryItem',
-                                        'module.cake_shop.clients.complains: DictionaryItem')
-        reloader.assert_actions('Update Module: module', 'Update DictionaryItem: module.cake_shop.clients')
+        reloader.assert_objects(module, 'sandbox.module.cake_shop: Dictionary',
+                                        'sandbox.module.cake_shop.cakes: DictionaryItem',
+                                        'sandbox.module.cake_shop.cupcakes: DictionaryItem',
+                                        'sandbox.module.cake_shop.clients: Dictionary',
+                                        'sandbox.module.cake_shop.clients.number: DictionaryItem',
+                                        'sandbox.module.cake_shop.clients.complains: DictionaryItem')
+        reloader.assert_actions('Update Module: sandbox.module', 'Update DictionaryItem: sandbox.module.cake_shop.clients')
 
         assert module.device.cake_shop["clients"]["number"] == 12
 
@@ -392,14 +392,14 @@ class TestDictionaries(utils.TestBase):
         module.load()
 
         assert module.device.cake_shop["clients"] is None
-        reloader.assert_objects(module, 'module.create_dict: Function',
-                                        'module.cake_shop: Dictionary',
-                                        'module.cake_shop.cakes: DictionaryItem',
-                                        'module.cake_shop.cupcakes: DictionaryItem',
-                                        'module.cake_shop.clients: DictionaryItem',
-                                        'module.cake_shop.meta: Dictionary',
-                                        'module.cake_shop.meta.shop_size_x: DictionaryItem',
-                                        'module.cake_shop.meta.shop_size_y: DictionaryItem')
+        reloader.assert_objects(module, 'sandbox.module.create_dict: Function',
+                                        'sandbox.module.cake_shop: Dictionary',
+                                        'sandbox.module.cake_shop.cakes: DictionaryItem',
+                                        'sandbox.module.cake_shop.cupcakes: DictionaryItem',
+                                        'sandbox.module.cake_shop.clients: DictionaryItem',
+                                        'sandbox.module.cake_shop.meta: Dictionary',
+                                        'sandbox.module.cake_shop.meta.shop_size_x: DictionaryItem',
+                                        'sandbox.module.cake_shop.meta.shop_size_y: DictionaryItem')
 
         module.rewrite("""
         def create_dict():
@@ -422,22 +422,22 @@ class TestDictionaries(utils.TestBase):
         reloader.reload(module)
 
         reloader.assert_objects(module,
-                                'module.create_dict: Function',
-                                'module.cake_shop: Dictionary',
-                                'module.cake_shop.cakes: DictionaryItem',
-                                'module.cake_shop.cupcakes: DictionaryItem',
-                                'module.cake_shop.clients: DictionaryItem',
-                                'module.cake_shop.meta: Dictionary',
-                                'module.cake_shop.meta.shop_size_x: DictionaryItem',
-                                'module.cake_shop.meta.shop_size_y: DictionaryItem',
-                                'module.cake_shop.extra_meta: Dictionary',
-                                'module.cake_shop.extra_meta.employees: DictionaryItem')
+                                'sandbox.module.create_dict: Function',
+                                'sandbox.module.cake_shop: Dictionary',
+                                'sandbox.module.cake_shop.cakes: DictionaryItem',
+                                'sandbox.module.cake_shop.cupcakes: DictionaryItem',
+                                'sandbox.module.cake_shop.clients: DictionaryItem',
+                                'sandbox.module.cake_shop.meta: Dictionary',
+                                'sandbox.module.cake_shop.meta.shop_size_x: DictionaryItem',
+                                'sandbox.module.cake_shop.meta.shop_size_y: DictionaryItem',
+                                'sandbox.module.cake_shop.extra_meta: Dictionary',
+                                'sandbox.module.cake_shop.extra_meta.employees: DictionaryItem')
 
-        reloader.assert_actions('Update Module: module',
-                                 'Update Function: module.create_dict',
-                                 'Add Dictionary: module.cake_shop.extra_meta',
-                                 'Update DictionaryItem: module.cake_shop.clients',
-                                 'Update DictionaryItem: module.cake_shop.meta.shop_size_x')
+        reloader.assert_actions('Update Module: sandbox.module',
+                                 'Update Function: sandbox.module.create_dict',
+                                 'Add Dictionary: sandbox.module.cake_shop.extra_meta',
+                                 'Update DictionaryItem: sandbox.module.cake_shop.clients',
+                                 'Update DictionaryItem: sandbox.module.cake_shop.meta.shop_size_x')
 
         assert module.device.cake_shop == {
             "cakes": 200,

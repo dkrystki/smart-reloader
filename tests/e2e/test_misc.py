@@ -66,7 +66,7 @@ class TestClasses(utils.TestBase):
     def test_full_reload(self, sandbox, smartreloader):
         config = Config()
 
-        carwash = Module(
+        cakeshop = Module(
             "cakeshop.py",
             r"""
         from smartreloader import e2e
@@ -83,11 +83,11 @@ class TestClasses(utils.TestBase):
         e.output(r"Starting...").eval()
 
         smartreloader.remote().wait_until_paused()
-        carwash.replace('class SuperType(int):', 'class SuperType(str):')
+        cakeshop.replace('class SuperType(int):', 'class SuperType(str):')
 
         e.output(r"\nStarting...").eval()
 
-        carwash.replace('class SuperType(str):', 'class SuperType(float):')
+        cakeshop.replace('class SuperType(str):', 'class SuperType(float):')
 
         e.output(r"\nStarting...").eval()
 
@@ -96,7 +96,7 @@ class TestClasses(utils.TestBase):
     def test_exits_on_sigint(self, sandbox, smartreloader):
         config = Config()
 
-        carwash = Module(
+        cakeshop = Module(
             "cakeshop.py",
             r"""
         from smartreloader import e2e
@@ -116,10 +116,13 @@ class TestClasses(utils.TestBase):
     def test_multiple_files_at_once(self, sandbox, smartreloader):
         config = Config()
 
-        carwash = Module(
+        cakeshop = Module(
             "cakeshop.py",
             r"""
         from smartreloader import e2e
+        import cake 
+
+        name = "my cakeshop"
 
         if __name__ == "__main__":
             print(f"Starting...")
@@ -127,17 +130,72 @@ class TestClasses(utils.TestBase):
         """,
         )
 
+        cake = Module(
+            "cake.py",
+            r"""
+        name = "cheesecake"
+        """,
+        )
+
         e = smartreloader.start("python cakeshop.py")
         e.output(r"Starting...").eval()
 
         smartreloader.remote().wait_until_paused()
-        carwash.replace('class SuperType(int):', 'class SuperType(str):')
-
-        e.output(r"\nStarting...").eval()
-
-        carwash.replace('class SuperType(str):', 'class SuperType(float):')
+        cakeshop.replace('name = "my cakeshop"', 'name = "cool cakeshop"')
+        cake.replace('name = "cheesecake"', 'name = "cool cakeshop"')
 
         e.output(r"\nStarting...").eval()
 
         smartreloader.exit()
 
+    def test_new_file(self, sandbox, smartreloader):
+        config = Config()
+
+        cakeshop = Module(
+            "cakeshop.py",
+            r"""
+        from smartreloader import e2e
+        
+        def print_cake():
+            print("no cake :(")
+
+        if __name__ == "__main__":
+            print(f"Starting...")
+            e2e.Debugger.pause()
+            print_cake()
+        """,
+        )
+
+        e = smartreloader.start("python cakeshop.py")
+        e.output(r"Starting...").eval()
+        smartreloader.remote().wait_until_paused()
+
+        cake = Module(
+            "cake.py",
+            r"""
+        name = "cheesecake"
+        """,
+        )
+
+        # so it doesn't trigger full reload on multiple events at once
+        sleep(0.5)
+
+        cakeshop.rewrite(r"""
+        from smartreloader import e2e
+        import cake
+        
+        def print_cake():
+            print(cake.name)
+
+        if __name__ == "__main__":
+            print(f"Starting...")
+            e2e.Debugger.pause()
+            print_cake()
+        """)
+
+        smartreloader.remote().assert_applied_actions('Update Module: cakeshop', 'Add Import: cakeshop.cake', 'Update Function: cakeshop.print_cake')
+        smartreloader.remote().resume()
+
+        e.output("\ncheesecake").eval()
+
+        smartreloader.exit()
