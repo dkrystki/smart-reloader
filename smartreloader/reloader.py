@@ -16,15 +16,13 @@ from globmatch import glob_match
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, EVENT_TYPE_MODIFIED, EVENT_TYPE_CREATED, EVENT_TYPE_DELETED, EVENT_TYPE_MOVED
 from watchdog.observers import Observer
 
-from smartreloader import PartialReloader, console
+from smartreloader import PartialReloader, console, sr_logger
+from smartreloader.sr_logger import SRLogger
 from smartreloader.misc import is_linux
 from smartreloader.exceptions import FullReloadNeeded
 from smartreloader.config import BaseConfig
 
 from collections import deque, defaultdict
-
-logger = getLogger("smart-reloader")
-logger.setLevel(logging.INFO)
 
 
 if TYPE_CHECKING:
@@ -40,7 +38,7 @@ signal.signal(signal.SIGINT, int_signal_handler)
 class Watchdog(FileSystemEventHandler):
     @dataclass
     class Callbacks:
-        on_write: Callable
+        on_modify: Callable
         on_new_file: Callable
         on_delete_file: Callable
         on_multiple_files_at_once: Callable
@@ -111,7 +109,7 @@ class Watchdog(FileSystemEventHandler):
 
             event = self._unprocessed_events.pop()
             if event.event_type == EVENT_TYPE_MODIFIED:
-                self._callbacks.on_write(event)
+                self._callbacks.on_modify(event)
             elif event.event_type == EVENT_TYPE_DELETED:
                 self._callbacks.on_delete_file(event)
             elif event.event_type == EVENT_TYPE_CREATED:
@@ -191,15 +189,18 @@ class Reloader:
     config: BaseConfig
     partial_reloader: PartialReloader
     watchdog: Watchdog
+    logger: SRLogger
 
     def __init__(self, root: str, config: BaseConfig):
         self.root = Path(root)
 
+        self.logger = SRLogger(source_root=self.root)
+
         self.config = config
-        self.partial_reloader = PartialReloader(root=self.root, logger=logger, config=self.config)
+        self.partial_reloader = PartialReloader(root=self.root, logger=self.logger, config=self.config)
         signal.signal(signal.SIGUSR1, self._execute_full_reload)
 
-        callbacks = Watchdog.Callbacks(on_write=self.on_write, on_new_file=self.on_new_file,
+        callbacks = Watchdog.Callbacks(on_modify=self.on_modify, on_new_file=self.on_new_file,
                                        on_delete_file=self.trigger_full_reload, on_multiple_files_at_once=self.trigger_full_reload,
                                        on_moved_file=self.trigger_full_reload)
 
@@ -215,21 +216,25 @@ class Reloader:
 
     def trigger_full_reload(self, *args, **kwargs) -> None:
         self.watchdog.stop()
-        logger.info("Triggering full reload...")
+        self.logger.info("Triggering full reload...")
         os.kill(os.getpid(), signal.SIGUSR1)
 
     def on_new_file(self, event: FileSystemEvent) -> None:
         pass
 
-    def on_write(self, event: FileSystemEvent):
+    def on_modify(self, event: FileSystemEvent):
         path = Path(event.src_path)
+        self.logger.info(f"File {str(path)} modified, hot reloading...")
 
         try:
             self.config.before_reload(path)
             self.partial_reloader.reload(path)
             self.config.after_reload(path, self.partial_reloader.applied_actions)
+
+            self.logger.log_hot_reloaded_event(actions=self.partial_reloader.applied_actions.copy(),
+                                               objects=sys.modules.user_modules[str(path)][0].flat)
         except FullReloadNeeded:
-            self.config.before_full_reload(path, None)
+            self.config.before_full_reload(path)
             self.trigger_full_reload()
         except Exception:
             from rich.traceback import Traceback

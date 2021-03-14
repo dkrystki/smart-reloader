@@ -43,6 +43,7 @@ Pillow = "^8.1.0"
 debugpy = "^1.2.1"
 pydevd = "^2.3.0"
 flaky = "^3.7.0"
+freezegun = "^1.1.0"
 
 [tool.poetry.scripts]
 smart = "smartreloader.entrypoint:_main"

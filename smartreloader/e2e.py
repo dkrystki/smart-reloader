@@ -1,9 +1,11 @@
-import signal
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
+import datetime as dt
 
 __all__ = []
+
+import freezegun
 
 STICKYBEAK_PORT = 5246
 
@@ -15,6 +17,8 @@ if TYPE_CHECKING:
     import stickybeak
 
 server: Optional["stickybeak.Server"] = None
+
+now = dt.datetime(2025, 1, 1, 12, 0, 0)
 
 
 class Debugger:
@@ -44,3 +48,4 @@ def start():
     server = stickybeak.Server(project_root, STICKYBEAK_PORT)
     server.start()
 
+    freezegun.freeze_time(now).start()

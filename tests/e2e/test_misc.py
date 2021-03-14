@@ -1,10 +1,16 @@
 import os
+import shutil
 import signal
 import stat
+from pathlib import Path
 from time import sleep
 
+from freezegun import freeze_time
 from pytest import mark
 from flaky import flaky
+
+from smartreloader import sr_logger, e2e
+from smartreloader.sr_logger import DEFAULT_LOGS_DIRECTORY
 from tests import utils
 from tests.utils import Module, Config
 
@@ -148,6 +154,7 @@ class TestClasses(utils.TestBase):
 
         smartreloader.exit()
 
+    @flaky(max_runs=3, min_passes=1)
     def test_new_file(self, sandbox, smartreloader):
         config = Config()
 
@@ -200,6 +207,7 @@ class TestClasses(utils.TestBase):
 
         smartreloader.exit()
 
+    @flaky(max_runs=3, min_passes=1)
     def test_delete_file(self, sandbox, smartreloader):
         config = Config()
 
@@ -228,3 +236,37 @@ class TestClasses(utils.TestBase):
         cake.path.unlink()
         e.output("\nStarting...").eval()
         smartreloader.exit()
+
+    def test_logger(self, sandbox, smartreloader):
+        log_dir = Path(sr_logger.DEFAULT_LOGS_DIRECTORY) / "sandbox" / sr_logger.SRLogger.datetime_to_folder_name(e2e.now)
+        shutil.rmtree(str(log_dir), ignore_errors=True)
+
+        config = Config()
+
+        cakeshop = Module(
+            "cakeshop.py",
+            r"""
+        from smartreloader import e2e
+
+        if __name__ == "__main__":
+            print(f"Starting...")
+            e2e.Debugger.pause()
+        """,
+        )
+
+        cake = Module(
+            "cake.py",
+            r"""
+        name = "cheesecake"
+        """,
+        )
+
+        e = smartreloader.start("python cakeshop.py")
+        e.output(r"Starting...").eval()
+        smartreloader.remote().wait_until_paused()
+
+        assert log_dir.exists()
+
+        cake.rewrite('name = "black forest cake"')
+
+        assert log_dir.exists()

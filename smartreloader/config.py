@@ -12,7 +12,7 @@ class BaseConfig:
     def on_start(self, argv: List[str]) -> None:
         pass
 
-    def before_full_reload(self, file: Path, reason: Exception) -> None:
+    def before_full_reload(self, file: Path) -> None:
         pass
 
     def before_reload(self, file: Path) -> None:

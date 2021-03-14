@@ -17,7 +17,7 @@ from typing import (
     Tuple,
     Type, )
 
-from . import dependency_watcher, objects
+from . import dependency_watcher, objects, sr_logger
 from smartreloader.objects.base_objects import Object, BaseAction
 
 from .config import BaseConfig
@@ -26,6 +26,7 @@ from .config import BaseConfig
 __all__ = ["PartialReloader"]
 
 from smartreloader.objects.modules import ModuleDescriptor, Modules, UpdateModule, Module
+from .sr_logger import SRLogger
 from .objects import Stack
 
 
@@ -80,7 +81,7 @@ class ObjectClassesManager:
 @dataclass
 class PartialReloader:
     root: Path
-    logger: Logger
+    logger: SRLogger
     named_obj_to_modules: DefaultDict[Tuple[str, int], Set[ModuleDescriptor]] = field(init=False,
                                                                                 default_factory=lambda: defaultdict(set))
     obj_to_modules: DefaultDict[int, Set[ModuleDescriptor]] = field(init=False,

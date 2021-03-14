@@ -30,7 +30,7 @@ GLOBAL_VAR = "hihi23"
 test = "fsfsda"
 
 
-class TestClass(int):
+class TestClass(str):
     pass
 
 def hihi(haha):
@@ -157,6 +157,5 @@ class AddressesViewset(
 ):
     queryset = models.Address.objects.all()
     serializer_class = serializers.AddressSerializer
-
 
 

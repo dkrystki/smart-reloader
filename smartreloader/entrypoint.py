@@ -41,6 +41,9 @@ class SmartReloader:
         from smartreloader.misc import import_from_file
         from smartreloader import e2e
         
+        if not e2e.enabled:
+            Path(__file__).unlink()
+        
         sys.argv = [{", ".join([f'"{a}"' for a in argv])}]
         
         config_file = Path("smartreloader_config.py")
@@ -53,12 +56,12 @@ class SmartReloader:
         
         from smartreloader.reloader import Reloader
         
-        reloader = Reloader("{str(root)}", config)
-        builtins.reloader = reloader
-        
         if __name__ == "__main__":
             if e2e.enabled:
                 e2e.start()
+                
+            reloader = Reloader("{str(root)}", config)
+            builtins.reloader = reloader
                 
             reloader.start()
             
@@ -90,13 +93,6 @@ class SmartReloader:
                 return full_path.absolute()
 
         return None
-
-    def remove_seed(self) -> None:
-        def target():
-            sleep(2.0)
-            self.seed_file.unlink()
-
-        Thread(target=target).start()
 
     def init(self):
         argv = sys.argv[1:]
@@ -131,6 +127,7 @@ class SmartReloader:
 
     def main_loop(self) -> int:
         while True:
+            self.init()
             proc = subprocess.Popen(["python", str(self.seed_file.name)])
 
             def signal_handler(sig, frame):
@@ -167,9 +164,6 @@ def _main() -> None:
     reloader.init()
 
     exit_code = reloader.main_loop()
-
-    if not e2e.enabled:
-        reloader.remove_seed()
 
     sys.exit(exit_code)
 

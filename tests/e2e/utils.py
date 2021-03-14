@@ -3,6 +3,7 @@ import re
 import signal
 import subprocess
 from pathlib import Path
+import datetime as dt
 from subprocess import Popen
 from threading import Thread
 from time import sleep
@@ -107,6 +108,11 @@ class SmartReloader:
         @classmethod
         def reset(cls) -> None:
             reloader.partial_reloader.reset()
+
+        @classmethod
+        def freeze_time(cls, fake_time: dt.datetime) -> None:
+            import freezegun
+            freezegun.freeze_time(fake_time).start()
 
         @classmethod
         def assert_applied_actions(cls, *actions, timeout=2) -> None:

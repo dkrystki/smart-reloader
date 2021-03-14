@@ -66,8 +66,6 @@ def disable():
 _default_level = -1 if sys.version_info < (3, 3) else 0
 module_file_to_start_import_usages: DefaultDict[str, Set[str]] = defaultdict(set)
 import_order: List[str] = []
-last_import_time = time.time()
-
 
 def reset():
     global module_file_to_start_import_usages
@@ -130,11 +128,6 @@ def extract_star_import_info(module: ModuleType, globals, fromlist):
     module_file_to_start_import_usages[imported_module_file].add(parent_module_file)
 
 
-def seconds_from_last_import() -> float:
-    global last_import_time
-    ret = time.time() - last_import_time
-    return ret
-
 
 def post_import(module: ModuleType):
     try:
@@ -153,9 +146,6 @@ def post_import(module: ModuleType):
 
 
 def _import(name, globals=None, locals=None, fromlist=None, level=_default_level):
-    global last_import_time
-    last_import_time = time.time()
-
     base = _baseimport(name, globals, locals, fromlist, level)
 
     if base is not None and fromlist and "*" in fromlist:
