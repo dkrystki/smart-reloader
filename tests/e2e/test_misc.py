@@ -199,3 +199,32 @@ class TestClasses(utils.TestBase):
         e.output("\ncheesecake").eval()
 
         smartreloader.exit()
+
+    def test_delete_file(self, sandbox, smartreloader):
+        config = Config()
+
+        cakeshop = Module(
+            "cakeshop.py",
+            r"""
+        from smartreloader import e2e
+
+        if __name__ == "__main__":
+            print(f"Starting...")
+            e2e.Debugger.pause()
+        """,
+        )
+
+        cake = Module(
+            "cake.py",
+            r"""
+        name = "cheesecake"
+        """,
+        )
+
+        e = smartreloader.start("python cakeshop.py")
+        e.output(r"Starting...").eval()
+        smartreloader.remote().wait_until_paused()
+
+        cake.path.unlink()
+        e.output("\nStarting...").eval()
+        smartreloader.exit()
