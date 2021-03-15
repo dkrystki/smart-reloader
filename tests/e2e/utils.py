@@ -110,7 +110,7 @@ class SmartReloader:
             reloader.partial_reloader.reset()
 
         @classmethod
-        def freeze_time(cls, fake_time: dt.datetime) -> None:
+        def freeze_time(cls, fake_time) -> None:
             import freezegun
             freezegun.freeze_time(fake_time).start()
 

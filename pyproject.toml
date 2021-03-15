@@ -6,7 +6,6 @@ authors = ["Damian Krystkiewicz <damian.krystkiewicz@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.6.1, <4.0"
-rich = "^9.10.0"
 globmatch = "^2.0.0"
 watchdog = "^1.0.2"
 dataclasses = { version = "*", python = ">=3.6, <3.7" }

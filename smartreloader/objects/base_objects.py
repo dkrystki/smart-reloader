@@ -1,9 +1,11 @@
+import ctypes
 import inspect
 import gc
 from abc import ABC
 from collections import OrderedDict
 from copy import copy
 from pathlib import Path
+from types import FrameType
 
 from dataclasses import field
 from textwrap import dedent
@@ -32,6 +34,9 @@ class BaseAction:
     reloader: "PartialReloader"
     priority: ClassVar[int] = field(init=False, default=100)
 
+    def log(self) -> None:
+        self.reloader.logger.info(str(self))
+
     def rollback(self) -> None:
         pass
 
@@ -46,6 +51,7 @@ class BaseAction:
 
     def pre_execute(self) -> None:
         self.reloader.applied_actions.append(self)
+        self.log()
 
 
 @dataclass

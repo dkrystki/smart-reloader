@@ -31,10 +31,14 @@ class Event:
                              indent=4)
 
         with open(str(self.sr_logger.log_file), "a+") as f:
-            f.seek(f.tell() - 2, os.SEEK_SET)
-            f.truncate()
-            if self.sr_logger.events:
+            if len(self.sr_logger.events) == 1:
+                f.seek(f.tell() - 1, os.SEEK_SET)
+                f.truncate()
+            else:
+                f.seek(f.tell() - 2, os.SEEK_SET)
+                f.truncate()
                 f.write(",\n")
+
             f.write(content)
             f.write("\n]\n")
 
@@ -65,8 +69,18 @@ class HotReloadedEvent(Event):
 class ModifiedEvent(Event):
     file: Path
 
+    snapshot_filename: str = field(init=False)
+    counter: ClassVar[int] = 0
+
     def __post_init__(self) -> None:
-        pass
+        self.snapshot_filename = f"{ModifiedEvent.counter}_{self.file.name}"
+        shutil.copy(self.file, self.sr_logger.source_changes_dir / self.snapshot_filename)
+        ModifiedEvent.counter += 1
+
+    def to_dict(self) -> Dict[str, Any]:
+        ret = super().to_dict()
+        ret["snapshot"] = self.snapshot_filename
+        return ret
 
 
 @dataclass
@@ -92,21 +106,25 @@ class SRLogger:
     log_file: Path = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
-        os.makedirs(str(self.logs_directory),exist_ok=True)
+        os.makedirs(str(self.logs_directory), exist_ok=True)
 
         self.log_directory = self.logs_directory / self.source_root.name / self.datetime_to_folder_name(dt.datetime.now())
-        os.makedirs(str(self.log_directory))
+        os.makedirs(str(self.log_directory), exist_ok=True)
 
         self.source_changes_dir = self.log_directory / SOURCE_CHANGES_DIR_NAME
-        os.makedirs(str(self.source_changes_dir))
+        os.makedirs(str(self.source_changes_dir), exist_ok=True)
 
         self.initial_source_dir = self.log_directory / "initial_source"
+
+        if self.initial_source_dir.exists():
+            shutil.rmtree(str(self.initial_source_dir))
+
         shutil.copytree(self.source_root, self.initial_source_dir, )
 
         self.logger.setLevel(logging.INFO)
         self.log_file = self.log_directory / LOG_FILE_NAME
         self.log_file.touch()
-        self.log_file.write_text("[\n,]")
+        self.log_file.write_text("[\n]")
 
     @classmethod
     def datetime_to_folder_name(cls, date_time: dt.datetime) -> str:
@@ -114,23 +132,27 @@ class SRLogger:
         return ret
 
     def log_modified(self, file: Path) -> None:
-        ret = ModifiedEvent(time=dt.datetime.now(),
+        event = ModifiedEvent(time=dt.datetime.now(),
                             sr_logger=self,
                             file=file)
-        self.events.append(ret)
+        self.add_event(event)
 
+    def add_event(self, event: Event) -> None:
+        self.events.append(event)
+        event.write()
 
     def log_hot_reloaded_event(self, actions: List[BaseAction], objects: Dict[str, Object]) -> None:
-        ret = HotReloadedEvent(time=dt.datetime.now(),
+        event = HotReloadedEvent(time=dt.datetime.now(),
                                sr_logger=self,
                                actions=actions,
                                objects=objects)
-        self.events.append(ret)
+
+        self.add_event(event)
 
     def log(self, level: int, msg: str) -> None:
         event = LogMsg(sr_logger=self, level=level, time=dt.datetime.now(), msg=msg)
-        event.write()
-        self.events.append(event)
+
+        self.add_event(event)
         self.logger.log(level, msg)
 
     def debug(self, msg: str) -> None:

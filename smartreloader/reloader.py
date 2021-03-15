@@ -4,6 +4,7 @@ import os
 import signal
 import sys
 import threading
+import traceback
 from logging import getLogger
 from pathlib import Path
 from threading import Thread
@@ -16,7 +17,7 @@ from globmatch import glob_match
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, EVENT_TYPE_MODIFIED, EVENT_TYPE_CREATED, EVENT_TYPE_DELETED, EVENT_TYPE_MOVED
 from watchdog.observers import Observer
 
-from smartreloader import PartialReloader, console, sr_logger
+from smartreloader import PartialReloader
 from smartreloader.sr_logger import SRLogger
 from smartreloader.misc import is_linux
 from smartreloader.exceptions import FullReloadNeeded
@@ -224,7 +225,8 @@ class Reloader:
 
     def on_modify(self, event: FileSystemEvent):
         path = Path(event.src_path)
-        self.logger.info(f"File {str(path)} modified, hot reloading...")
+
+        self.logger.log_modified(path)
 
         try:
             self.config.before_reload(path)
@@ -232,22 +234,14 @@ class Reloader:
             self.config.after_reload(path, self.partial_reloader.applied_actions)
 
             self.logger.log_hot_reloaded_event(actions=self.partial_reloader.applied_actions.copy(),
-                                               objects=sys.modules.user_modules[str(path)][0].flat)
+                                               objects=sys.modules.user_modules[str(path)][0].module_obj.flat)
         except FullReloadNeeded:
             self.config.before_full_reload(path)
             self.trigger_full_reload()
         except Exception:
-            from rich.traceback import Traceback
-
             self.config.after_rollback(path, self.partial_reloader.applied_actions)
 
-            exc_type, exc_value, traceback = sys.exc_info()
-
-            trace = Traceback.extract(exc_type, exc_value, traceback)
-            trace.stacks[0].frames = trace.stacks[0].frames[-1:]
-            trace.stacks = [trace.stacks[0]]
-            traceback_obj = Traceback(trace=trace, width=800, show_locals=True)
-            console.print(traceback_obj)
+            traceback.print_exc(limit=-1)
 
             self.partial_reloader.rollback()
             self.config.after_rollback(path, self.partial_reloader.applied_actions)

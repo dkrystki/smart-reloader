@@ -1,8 +1,11 @@
+import json
 import os
 import shutil
 import signal
+import datetime as dt
 import stat
 from pathlib import Path
+from textwrap import dedent
 from time import sleep
 
 from freezegun import freeze_time
@@ -200,7 +203,8 @@ class TestClasses(utils.TestBase):
             print_cake()
         """)
 
-        smartreloader.remote().assert_applied_actions('Update Module: cakeshop', 'Add Import: cakeshop.cake', 'Update Function: cakeshop.print_cake')
+        smartreloader.remote().assert_applied_actions('Update Module: cakeshop', 'Add Import: cakeshop.cake',
+                                                      'Update Function: cakeshop.print_cake')
         smartreloader.remote().resume()
 
         e.output("\ncheesecake").eval()
@@ -238,7 +242,8 @@ class TestClasses(utils.TestBase):
         smartreloader.exit()
 
     def test_logger(self, sandbox, smartreloader):
-        log_dir = Path(sr_logger.DEFAULT_LOGS_DIRECTORY) / "sandbox" / sr_logger.SRLogger.datetime_to_folder_name(e2e.now)
+        log_dir = Path(sr_logger.DEFAULT_LOGS_DIRECTORY) / "sandbox" / sr_logger.SRLogger.datetime_to_folder_name(
+            e2e.now)
         shutil.rmtree(str(log_dir), ignore_errors=True)
 
         config = Config()
@@ -247,6 +252,7 @@ class TestClasses(utils.TestBase):
             "cakeshop.py",
             r"""
         from smartreloader import e2e
+        import cake
 
         if __name__ == "__main__":
             print(f"Starting...")
@@ -269,4 +275,84 @@ class TestClasses(utils.TestBase):
 
         cake.rewrite('name = "black forest cake"')
 
-        assert log_dir.exists()
+        smartreloader.remote().freeze_time(dt.datetime(2025, 1, 1, 13, 0, 0))
+
+        sleep(1.0)
+        smartreloader.remote().freeze_time(dt.datetime(2025, 1, 1, 14, 0, 0))
+        cake.rewrite('name = "birthday cake"')
+
+        sleep(1.0)
+
+        log_file = log_dir / sr_logger.LOG_FILE_NAME
+        content = json.loads(log_file.read_text())
+
+        content[0]["msg"] = "Create msg"
+
+        assert content == [
+            {
+                'event_type': 'LogMsg',
+                'msg': "Create msg",
+                'time': '01/01/2025 12:00:00'
+            },
+            {
+                'event_type': 'ModifiedEvent',
+                'snapshot': '0_cake.py',
+                'time': '01/01/2025 12:00:00'
+            },
+            {
+                'event_type': 'LogMsg',
+                'msg': 'Update Module: cake',
+                'time': '01/01/2025 12:00:00'
+            },
+            {
+                'event_type': 'LogMsg',
+                'msg': 'Update Variable: cake.name',
+                'time': '01/01/2025 12:00:00'
+            },
+            {
+                'actions': ['Update Module: cake', 'Update Variable: cake.name'],
+                'event_type': 'HotReloadedEvent',
+                'objects': ['cake.name: Variable'],
+                'time': '01/01/2025 12:00:00'
+            }
+        ]
+
+    def test_error(self, sandbox, smartreloader):
+        log_dir = Path(sr_logger.DEFAULT_LOGS_DIRECTORY) / "sandbox" / sr_logger.SRLogger.datetime_to_folder_name(
+            e2e.now)
+        shutil.rmtree(str(log_dir), ignore_errors=True)
+
+        config = Config()
+
+        cakeshop = Module(
+            "cakeshop.py",
+            r"""
+        from smartreloader import e2e
+
+        if __name__ == "__main__":
+            print(f"Starting...")
+            e2e.Debugger.pause()
+        """
+        )
+
+        e = smartreloader.start("python cakeshop.py")
+        e.output(r"Starting...").eval()
+        smartreloader.remote().wait_until_paused()
+
+        cakeshop.rewrite(r"""
+        from smartreloader import e2e
+        
+        value = 1/0
+        
+        if __name__ == "__main__":
+            print(f"Starting...")
+            e2e.Debugger.pause()
+        """)
+
+        e.output(dedent(r"""
+                Traceback \(most recent call last\):
+                  File ".*cakeshop\.py", line 4, in <module>
+                    value = 1/0
+                ZeroDivisionError: division by zero""")).eval()
+
+        smartreloader.exit()
